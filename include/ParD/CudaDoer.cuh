@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <limits>
 
-#include "ParD/ParallelDoer/ParallelDoer.hpp"
+#include "ParD/ParallelDoer.hpp"
 #include "ParD/util/CudaErrorCheck.cuh"
 
 namespace ParD {

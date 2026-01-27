@@ -2,7 +2,7 @@
 
 #include <utility>
 
-#include "ParallelDoer.hpp"
+#include "ParD/ParallelDoer.hpp"
 
 namespace ParD {
 struct SingleThreadedDoer {

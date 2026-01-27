@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "ParallelDoer.hpp"
+#include "ParD/ParallelDoer.hpp"
 
 namespace ParD {
 template <typename Predicate>
