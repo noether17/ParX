@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "ParallelExecutor.hpp"
+#include "ParallelDoer.hpp"
 
 namespace ParD {
 template <typename Predicate>
@@ -25,9 +25,9 @@ bool spinlock(std::stop_token& stop_token, Predicate pred) {
   return false;
 }
 
-class ThreadPoolExecutor {
+class ThreadPoolDoer {
  public:
-  explicit ThreadPoolExecutor(std::size_t n_threads)
+  explicit ThreadPoolDoer(std::size_t n_threads)
       : m_task_ready_flags(n_threads) {
     for (std::size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
       m_threads.emplace_back(
@@ -60,7 +60,7 @@ class ThreadPoolExecutor {
     }
   }
 
-  ~ThreadPoolExecutor() { m_stop_source.request_stop(); }
+  ~ThreadPoolDoer() { m_stop_source.request_stop(); }
 
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)

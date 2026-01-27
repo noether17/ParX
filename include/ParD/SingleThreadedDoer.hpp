@@ -2,10 +2,10 @@
 
 #include <utility>
 
-#include "ParallelExecutor.hpp"
+#include "ParallelDoer.hpp"
 
 namespace ParD {
-struct SingleThreadedExecutor {
+struct SingleThreadedDoer {
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
     requires Kernel<kernel, Args...>

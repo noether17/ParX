@@ -36,16 +36,16 @@ concept Reduction = requires(T a, T b) {
   { reduce(a, b) } -> std::same_as<T>;
 };
 
-template <auto kernel, typename ParallelExecutor, typename... Args>
-void call_kernel(ParallelExecutor& exe, std::size_t n_items, Args... args)
+template <auto kernel, typename ParallelDoer, typename... Args>
+void call_kernel(ParallelDoer& exe, std::size_t n_items, Args... args)
   requires Kernel<kernel, Args...>
 {
   exe.template call_kernel<kernel>(n_items, std::move(args)...);
 }
 
-template <typename T, auto reduce, auto transform, typename ParallelExecutor,
+template <typename T, auto reduce, auto transform, typename ParallelDoer,
           typename... TransformArgs>
-T transform_reduce(ParallelExecutor& exe, T init_val, std::size_t n_items,
+T transform_reduce(ParallelDoer& exe, T init_val, std::size_t n_items,
                    TransformArgs... transform_args)
   requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
 {

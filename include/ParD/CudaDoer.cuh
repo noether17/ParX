@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <limits>
 
-#include "ParD/ParallelExecutor/ParallelExecutor.hpp"
+#include "ParD/ParallelDoer/ParallelDoer.hpp"
 #include "ParD/util/CudaErrorCheck.cuh"
 
 namespace ParD {
@@ -78,7 +78,7 @@ __global__ void cuda_transform_reduce_final(T* result, T const* block_results,
 }
 
 template <std::size_t block_size>
-class CudaExecutor {
+class CudaDoer {
   static constexpr auto max_blocks =
       std::numeric_limits<int>::max() / block_size;
   static constexpr auto n_blocks(std::size_t N) {
