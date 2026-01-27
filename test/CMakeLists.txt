@@ -19,6 +19,14 @@ target_link_libraries(ThreadPoolDoerTest
 )
 add_test(NAME ThreadPoolDoerTest COMMAND ThreadPoolDoerTest)
 
+add_executable(ThreadPoolTemplateDoerTest ThreadPoolTemplateDoerTest.cpp)
+target_link_libraries(ThreadPoolTemplateDoerTest
+  GTest::GTest
+  GTest::Main
+  ParD::ParD
+)
+add_test(NAME ThreadPoolTemplateDoerTest COMMAND ThreadPoolTemplateDoerTest)
+
 include(CheckLanguage)
 check_language(CUDA)
 if(CMAKE_CUDA_COMPILER)

@@ -123,4 +123,10 @@ class ThreadPoolDoer {
   std::atomic_ulong m_n_items{};
   std::vector<std::jthread> m_threads{};
 };
+
+// Template version for testing purposes.
+template <std::size_t num_threads>
+struct ThreadPoolTemplateDoer : ThreadPoolDoer {
+  ThreadPoolTemplateDoer() : ThreadPoolDoer(num_threads) {}
+};
 }  // namespace ParD
