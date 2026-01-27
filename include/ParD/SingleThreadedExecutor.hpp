@@ -4,7 +4,7 @@
 
 #include "ParallelExecutor.hpp"
 
-namespace ParODE {
+namespace ParD {
 struct SingleThreadedExecutor {
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
@@ -28,4 +28,4 @@ struct SingleThreadedExecutor {
     return result;
   }
 };
-}  // namespace ParODE
+}  // namespace ParD

@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <limits>
 
-#include "ParODE/ParallelExecutor/ParallelExecutor.hpp"
-#include "ParODE/util/CudaErrorCheck.cuh"
+#include "ParD/ParallelExecutor/ParallelExecutor.hpp"
+#include "ParD/util/CudaErrorCheck.cuh"
 
-namespace ParODE {
+namespace ParD {
 template <auto kernel, typename... Args>
 __global__ void cuda_call_kernel(std::size_t n_items, Args... args)
   requires Kernel<kernel, Args...>
@@ -124,4 +124,4 @@ class CudaExecutor {
     return reduce(init_val, result);
   }
 };
-}  // namespace ParODE
+}  // namespace ParD

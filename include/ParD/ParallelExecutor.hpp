@@ -3,7 +3,7 @@
 #include <concepts>
 #include <utility>
 
-namespace ParODE {
+namespace ParD {
 /* Kernel concept for constraining callables intended for element-wise
  * operations. Must take a std::size_t index as the first argument, as well as a
  * parameter pack consisting of the data on which to perform the operation. All
@@ -52,4 +52,4 @@ T transform_reduce(ParallelExecutor& exe, T init_val, std::size_t n_items,
   return exe.template transform_reduce<T, reduce, transform>(
       init_val, n_items, std::move(transform_args)...);
 }
-}  // namespace ParODE
+}  // namespace ParD

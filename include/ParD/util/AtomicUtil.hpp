@@ -2,7 +2,7 @@
 
 #include <atomic>
 
-namespace ParODE {
+namespace ParD {
 template <typename T>
 constexpr void atomic_add(T* a_ptr, T b) {
 #ifndef __CUDA_ARCH__

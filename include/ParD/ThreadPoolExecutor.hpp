@@ -10,7 +10,7 @@
 
 #include "ParallelExecutor.hpp"
 
-namespace ParODE {
+namespace ParD {
 template <typename Predicate>
 bool spinlock(std::stop_token& stop_token, Predicate pred) {
   for (auto trial = 0; not stop_token.stop_requested(); ++trial) {
@@ -123,4 +123,4 @@ class ThreadPoolExecutor {
   std::atomic_ulong m_n_items{};
   std::vector<std::jthread> m_threads{};
 };
-}  // namespace ParODE
+}  // namespace ParD
