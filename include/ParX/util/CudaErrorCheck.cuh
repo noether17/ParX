@@ -3,9 +3,9 @@
 #include <iostream>
 
 #define CUDA_ERROR_CHECK(expression) \
-  ParD::detail::cuda_error_check((expression), __func__, __FILE__, __LINE__)
+  ParX::detail::cuda_error_check((expression), __func__, __FILE__, __LINE__)
 
-namespace ParD::detail {
+namespace ParX::detail {
 inline cudaError_t cuda_error_check(cudaError_t error_code,
                                     char const* function_name,
                                     char const* file_name, int line_number) {
@@ -16,4 +16,4 @@ inline cudaError_t cuda_error_check(cudaError_t error_code,
   }
   return error_code;
 }
-}  // namespace ParD::detail
+}  // namespace ParX::detail

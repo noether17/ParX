@@ -2,11 +2,11 @@
 
 #include <vector>
 
-#include "ParD/ParallelDoer.hpp"
-#include "ParD/SingleThreadedDoer.hpp"
+#include "ParX/ParallelExecutor.hpp"
+#include "ParX/SingleThreadedExecutor.hpp"
 #include "multiply_kernel.hpp"
 
-TEST(SingleThreadedDoerTest, MultiplyTest) {
+TEST(SingleThreadedExecutorTest, MultiplyTest) {
   static constexpr auto N = 1 << 10;
   auto const a = [] {
     auto v = std::vector<double>(N);
@@ -17,7 +17,7 @@ TEST(SingleThreadedDoerTest, MultiplyTest) {
   }();
   auto const b = a;
   auto c = std::vector<double>(N);
-  auto doer = ParD::SingleThreadedDoer{};
+  auto doer = ParX::SingleThreadedExecutor{};
 
   call_kernel<multiply_kernel>(doer, N, a.data(), b.data(), c.data());
 

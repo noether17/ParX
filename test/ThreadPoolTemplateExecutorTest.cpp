@@ -2,11 +2,11 @@
 
 #include <vector>
 
-#include "ParD/ParallelDoer.hpp"
-#include "ParD/ThreadPoolDoer.hpp"
+#include "ParX/ParallelExecutor.hpp"
+#include "ParX/ThreadPoolExecutor.hpp"
 #include "multiply_kernel.hpp"
 
-TEST(ThreadPoolDoerTest, MultiplyTest) {
+TEST(ThreadPoolTemplateExecutorTest, MultiplyTest) {
   static constexpr auto N = 1 << 10;
   static constexpr auto n_threads = 8;
   auto const a = [] {
@@ -18,7 +18,7 @@ TEST(ThreadPoolDoerTest, MultiplyTest) {
   }();
   auto const b = a;
   auto c = std::vector<double>(N);
-  auto doer = ParD::ThreadPoolDoer(n_threads);
+  auto doer = ParX::ThreadPoolTemplateExecutor<n_threads>{};
 
   call_kernel<multiply_kernel>(doer, N, a.data(), b.data(), c.data());
 

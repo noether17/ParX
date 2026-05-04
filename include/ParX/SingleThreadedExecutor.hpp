@@ -2,10 +2,10 @@
 
 #include <utility>
 
-#include "ParD/ParallelDoer.hpp"
+#include "ParX/ParallelExecutor.hpp"
 
-namespace ParD {
-struct SingleThreadedDoer {
+namespace ParX {
+struct SingleThreadedExecutor {
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
     requires Kernel<kernel, Args...>
@@ -28,4 +28,4 @@ struct SingleThreadedDoer {
     return result;
   }
 };
-}  // namespace ParD
+}  // namespace ParX

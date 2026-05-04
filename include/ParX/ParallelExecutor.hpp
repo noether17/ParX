@@ -3,7 +3,7 @@
 #include <concepts>
 #include <utility>
 
-namespace ParD {
+namespace ParX {
 /* Kernel concept for constraining callables intended for element-wise
  * operations. Must take a std::size_t index as the first argument, as well as a
  * parameter pack consisting of the data on which to perform the operation. All
@@ -36,20 +36,20 @@ concept Reduction = requires(T a, T b) {
   { reduce(a, b) } -> std::same_as<T>;
 };
 
-template <auto kernel, typename ParallelDoer, typename... Args>
-void call_kernel(ParallelDoer& exe, std::size_t n_items, Args... args)
+template <auto kernel, typename ParallelExecutor, typename... Args>
+void call_kernel(ParallelExecutor& exe, std::size_t n_items, Args... args)
   requires Kernel<kernel, Args...>
 {
   exe.template call_kernel<kernel>(n_items, std::move(args)...);
 }
 
-template <typename T, auto reduce, auto transform, typename ParallelDoer,
+template <typename T, auto reduce, auto transform, typename ParallelExecutor,
           typename... TransformArgs>
-T transform_reduce(ParallelDoer& exe, T init_val, std::size_t n_items,
+T transform_reduce(ParallelExecutor& exe, T init_val, std::size_t n_items,
                    TransformArgs... transform_args)
   requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
 {
   return exe.template transform_reduce<T, reduce, transform>(
       init_val, n_items, std::move(transform_args)...);
 }
-}  // namespace ParD
+}  // namespace ParX

@@ -2,11 +2,11 @@
 
 #include <vector>
 
-#include "ParD/CudaDoer.cuh"
-#include "ParD/ParallelDoer.hpp"
+#include "ParX/CudaExecutor.cuh"
+#include "ParX/ParallelExecutor.hpp"
 #include "multiply_kernel.hpp"
 
-TEST(CudaDoerTest, MultiplyTest) {
+TEST(CudaExecutorTest, MultiplyTest) {
   static constexpr auto N = 1 << 10;
   static constexpr auto n_threads_per_block = 256;
   auto const a = [] {
@@ -18,7 +18,7 @@ TEST(CudaDoerTest, MultiplyTest) {
   }();
   auto const b = a;
   auto c = std::vector<double>(N);
-  auto doer = ParD::CudaDoer<n_threads_per_block>{};
+  auto doer = ParX::CudaExecutor<n_threads_per_block>{};
 
   auto dev_a = static_cast<double*>(nullptr);
   auto dev_b = static_cast<double*>(nullptr);

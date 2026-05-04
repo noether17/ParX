@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <limits>
 
-#include "ParD/ParallelDoer.hpp"
-#include "ParD/util/CudaErrorCheck.cuh"
+#include "ParX/ParallelExecutor.hpp"
+#include "ParX/util/CudaErrorCheck.cuh"
 
-namespace ParD {
+namespace ParX {
 template <auto kernel, typename... Args>
 __global__ void cuda_call_kernel(std::size_t n_items, Args... args)
   requires Kernel<kernel, Args...>
@@ -78,7 +78,7 @@ __global__ void cuda_transform_reduce_final(T* result, T const* block_results,
 }
 
 template <std::size_t block_size>
-class CudaDoer {
+class CudaExecutor {
   static constexpr auto max_blocks =
       std::numeric_limits<int>::max() / block_size;
   static constexpr auto n_blocks(std::size_t N) {
@@ -124,4 +124,4 @@ class CudaDoer {
     return reduce(init_val, result);
   }
 };
-}  // namespace ParD
+}  // namespace ParX

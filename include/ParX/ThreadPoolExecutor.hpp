@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "ParD/ParallelDoer.hpp"
+#include "ParX/ParallelExecutor.hpp"
 
-namespace ParD {
+namespace ParX {
 template <typename Predicate>
 bool spinlock(std::stop_token& stop_token, Predicate pred) {
   for (auto trial = 0; not stop_token.stop_requested(); ++trial) {
@@ -25,9 +25,9 @@ bool spinlock(std::stop_token& stop_token, Predicate pred) {
   return false;
 }
 
-class ThreadPoolDoer {
+class ThreadPoolExecutor {
  public:
-  explicit ThreadPoolDoer(std::size_t n_threads)
+  explicit ThreadPoolExecutor(std::size_t n_threads)
       : m_task_ready_flags(n_threads) {
     for (std::size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
       m_threads.emplace_back(
@@ -60,7 +60,7 @@ class ThreadPoolDoer {
     }
   }
 
-  ~ThreadPoolDoer() { m_stop_source.request_stop(); }
+  ~ThreadPoolExecutor() { m_stop_source.request_stop(); }
 
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
@@ -126,7 +126,7 @@ class ThreadPoolDoer {
 
 // Template version for testing purposes.
 template <std::size_t num_threads>
-struct ThreadPoolTemplateDoer : ThreadPoolDoer {
-  ThreadPoolTemplateDoer() : ThreadPoolDoer(num_threads) {}
+struct ThreadPoolTemplateExecutor : ThreadPoolExecutor {
+  ThreadPoolTemplateExecutor() : ThreadPoolExecutor(num_threads) {}
 };
-}  // namespace ParD
+}  // namespace ParX
