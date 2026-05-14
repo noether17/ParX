@@ -18,9 +18,10 @@ TEST(ThreadPoolTemplateExecutorTest, MultiplyTest) {
   }();
   auto const b = a;
   auto c = std::vector<double>(N);
-  auto doer = ParX::ThreadPoolTemplateExecutor<n_threads>{};
+  auto executor = ParX::ThreadPoolTemplateExecutor<n_threads>{};
 
-  call_kernel<multiply_kernel>(doer, N, a.data(), b.data(), c.data());
+  call_kernel<multiply_kernel>(executor, N, a.data(), b.data(), c.data());
+  executor.synchronize();
 
   for (auto i = 0; i < N; ++i) {
     EXPECT_DOUBLE_EQ(a[i] * b[i], c[i]);
