@@ -19,20 +19,27 @@ class ScopedLogger {
   ScopedLogger(Args&&... args, std::source_location const& loc =
                                    std::source_location::current())
       : loc_{loc} {
-    (message_ << ... << args) << "";
+    if constexpr (sizeof...(Args) != 0) {
+      (message_ << ... << args);
+    }
     LOG(loc_.function_name(), '(', loc_.file_name(), ':', loc_.line(), ") ",
         message_.str());
   }
 
   ~ScopedLogger() {
-    LOG('~', loc_.function_name(), '(', loc_.file_name(), ':', loc_.line(),
-        ") ", message_.str());
+    LOG("~~~", loc_.function_name(), '(', loc_.file_name(), ':', loc_.line(),
+        ") ", message_.str(), " ~~~");
   }
 
  private:
   std::source_location loc_{};
   std::stringstream message_{};
 };
+
+template <typename... Args>
+ScopedLogger(Args&&...) -> ScopedLogger<Args...>;
+
+#define SCOPED_LOG(...) auto _ = ScopedLogger(__VA_ARGS__);
 
 template <typename... Args>
 class FUNCTION_LOG {
@@ -48,5 +55,6 @@ template <typename... Args>
 FUNCTION_LOG(Args&&...) -> FUNCTION_LOG<Args...>;
 
 #else
+#define SCOPED_LOG(...)
 #define FUNCTION_LOG(...)
 #endif
