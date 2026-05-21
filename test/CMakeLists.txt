@@ -35,13 +35,17 @@ if(CMAKE_CUDA_COMPILER)
   set(CMAKE_CUDA_STANDARD 20)
   set(CMAKE_CUDA_STANDARD_REQUIRED True)
   set(CMAKE_CUDA_ARCHITECTURES native)
+  set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} \
     -Xcompiler -Wall \
     -Xcompiler -Wextra \
     -Xcompiler -Werror \
     -Xcompiler -O3 \
-    --expt-relaxed-constexpr"
+    -Xcompiler -fconcepts-diagnostics-depth=2 \
+    --expt-relaxed-constexpr \
+    --extended-lambda \
+    -v"
   )
 
   add_executable(CudaExecutorTest CudaExecutorTest.cu)

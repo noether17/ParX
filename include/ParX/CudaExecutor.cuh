@@ -18,6 +18,8 @@ __global__ void cuda_call_kernel(std::size_t n_items, Args... args)
   }
 }
 
+template __global__ void cuda_call_kernel<detail::basic_kernel>(std::size_t);
+
 template <std::size_t block_size, typename T, auto reduce, auto transform,
           typename... TransformArgs>
 __global__ void cuda_transform_reduce(T* block_results, std::size_t n_items,
@@ -77,8 +79,21 @@ __global__ void cuda_transform_reduce_final(T* result, T const* block_results,
   }
 }
 
+class CudaExecutorInterface {
+ public:
+  template <auto kernel, typename... Args>
+  void call_kernel(std::size_t, Args...)
+    requires Kernel<kernel, Args...>
+  {}
+
+  void synchronize() const {}
+};
+
+template void CudaExecutorInterface::call_kernel<detail::basic_kernel>(
+    std::size_t);
+
 template <std::size_t block_size>
-class CudaExecutor {
+class CudaExecutor : public CudaExecutorInterface {
   static constexpr auto max_blocks =
       std::numeric_limits<int>::max() / block_size;
   static constexpr auto n_blocks(std::size_t N) {
@@ -123,5 +138,10 @@ class CudaExecutor {
 
     return reduce(init_val, result);
   }
+
+  void synchronize() const { cudaDeviceSynchronize(); }
 };
+template class CudaExecutor<256UL>;
+template void CudaExecutor<256UL>::call_kernel<detail::basic_kernel>(
+    std::size_t);
 }  // namespace ParX

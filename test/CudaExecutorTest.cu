@@ -6,9 +6,24 @@
 #include "ParX/ParallelExecutor.hpp"
 #include "multiply_kernel.hpp"
 
+template <ParX::ParallelExecutor X>
+void check_parallel_executor(X&&) {}
+
 TEST(CudaExecutorTest, MultiplyTest) {
   static constexpr auto N = 1 << 10;
   static constexpr auto n_threads_per_block = 256;
+  static_assert(ParX::Kernel<ParX::detail::basic_kernel>, "");
+  static_assert(ParX::KernelExecutor<ParX::CudaExecutor<n_threads_per_block>,
+                                     ParX::detail::basic_kernel>,
+                "");
+  static_assert(ParX::KernelExecutor<ParX::CudaExecutor<n_threads_per_block>,
+                                     multiply_kernel, double const*,
+                                     double const*, double*>,
+                "");
+  check_parallel_executor(ParX::CudaExecutorInterface{});
+  check_parallel_executor(ParX::CudaExecutor<n_threads_per_block>{});
+  static_assert(ParX::ParallelExecutor<ParX::CudaExecutor<n_threads_per_block>>,
+                "");
   auto const a = [] {
     auto v = std::vector<double>(N);
     for (auto i = 0; auto& x : v) {

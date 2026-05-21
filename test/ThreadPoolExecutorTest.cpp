@@ -7,6 +7,7 @@
 #include "multiply_kernel.hpp"
 
 TEST(ThreadPoolExecutorTest, MultiplyTest) {
+  static_assert(ParX::ParallelExecutor<ParX::ThreadPoolExecutor>, "");
   static constexpr auto N = 1 << 10;
   static constexpr auto n_threads = 8;
   auto const a = [] {
