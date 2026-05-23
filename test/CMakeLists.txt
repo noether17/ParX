@@ -122,3 +122,10 @@ generate_par_exec_test(
   ""
   "CXX"
 )
+generate_par_exec_test(
+  "ParX::CudaExecutor"
+  "ParX/CudaExecutor.cuh"
+  "32"
+  ""
+  "CUDA"
+)
