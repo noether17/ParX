@@ -42,6 +42,40 @@ install(
     "${LIB_INSTALL_DIR}"
 )
 
+add_custom_target("SingleThreadedExecutor")
+set_target_properties("SingleThreadedExecutor" PROPERTIES
+  LANGUAGE "CXX"
+  TEMPLATE_PARAMS ""
+  HEADER_FILE "SingleThreadedExecutor.hpp"
+)
+add_custom_target("ThreadPoolTemplateExecutor")
+set_target_properties("ThreadPoolTemplateExecutor" PROPERTIES
+  LANGUAGE "CXX"
+  TEMPLATE_PARAMS "CPU_THREADS"
+  HEADER_FILE "ThreadPoolExecutor.hpp"
+)
+add_custom_target("CudaExecutor")
+set_target_properties("CudaExecutor" PROPERTIES
+  LANGUAGE "CUDA"
+  TEMPLATE_PARAMS "CUDA_THREADS_PER_BLOCK"
+  HEADER_FILE "CudaExecutor.cuh"
+)
+set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
+  "SingleThreadedExecutor"
+  "ThreadPoolTemplateExecutor"
+  "CudaExecutor"
+)
+get_property(PAR_EXECS GLOBAL PROPERTY PARALLEL_EXECUTORS)
+foreach(PAR_EXEC IN LISTS PAR_EXECS)
+  message(STATUS "Reading ${PAR_EXEC} from list PAR_EXECS")
+  get_target_property(PAR_EXEC_LANG "${PAR_EXEC}" "LANGUAGE")
+  message(STATUS "  ${PAR_EXEC}::LANGUAGE: ${PAR_EXEC_LANG}")
+  get_target_property(PAR_EXEC_TMP_PARAMS "${PAR_EXEC}" "TEMPLATE_PARAMS")
+  message(STATUS "  ${PAR_EXEC}::TEMPLATE_PARAMS: ${PAR_EXEC_TMP_PARAMS}")
+  get_target_property(PAR_EXEC_HEADER "${PAR_EXEC}" "HEADER_FILE")
+  message(STATUS "  ${PAR_EXEC}::HEADER_FILE: ${PAR_EXEC_HEADER}")
+endforeach()
+
 enable_testing()
 find_package(GTest 1.14.0 REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
