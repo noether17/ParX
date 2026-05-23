@@ -80,7 +80,8 @@ function(generate_par_exec_test
   else()
     set(PAR_EXEC_TYPE "${PAR_EXEC}")
   endif()
-  string(REGEX REPLACE "[<,]*(::)" "_" PAR_EXEC_TYPE_TOKEN "${PAR_EXEC_TYPE}")
+  string(REGEX REPLACE "[<,]" "_" PAR_EXEC_TYPE_TOKEN "${PAR_EXEC_TYPE}")
+  string(REGEX REPLACE "::" "_" PAR_EXEC_TYPE_TOKEN "${PAR_EXEC_TYPE_TOKEN}")
   string(REGEX REPLACE "[> ]" "" PAR_EXEC_TYPE_TOKEN "${PAR_EXEC_TYPE_TOKEN}")
 
   if(LANGUAGE MATCHES "CXX")
@@ -111,6 +112,13 @@ generate_par_exec_test(
   "ParX::SingleThreadedExecutor"
   "ParX/SingleThreadedExecutor.hpp"
   ""
+  ""
+  "CXX"
+)
+generate_par_exec_test(
+  "ParX::ThreadPoolTemplateExecutor"
+  "ParX/ThreadPoolExecutor.hpp"
+  "32"
   ""
   "CXX"
 )
