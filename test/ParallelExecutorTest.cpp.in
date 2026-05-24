@@ -97,7 +97,7 @@ class ${TEST_NAME} : public testing::Test {
   }
 
   // clang-format off
-  ${PAR_EXEC_TYPE} par_exec{};
+  ${PAR_EXEC_TYPE} par_exec{${CTOR_ARGS}};
 };
 
 TEST_F(${TEST_NAME}, SingleSumTest) {

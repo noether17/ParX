@@ -92,12 +92,16 @@ function(generate_par_exec_test
     message(STATUS "LANGUAGE not recognized")
   endif()
 
-  set(TEST_NAME "${PAR_EXEC_TYPE_TOKEN}_Test")
+  set(PAR_EXEC_SPEC "${PAR_EXEC_TYPE_TOKEN}_${CTOR_ARGS}")
+  string(REGEX REPLACE ", *" "_" PAR_EXEC_SPEC "${PAR_EXEC_SPEC}")
+  string(REGEX REPLACE "_$" "" PAR_EXEC_SPEC "${PAR_EXEC_SPEC}")
+  set(TEST_NAME "${PAR_EXEC_SPEC}_Test")
   set(TEST_FILE_NAME "${TEST_NAME}.${TEST_FILE_EXT}")
   set(TEST_FILE_PATH "${CMAKE_CURRENT_BINARY_DIR}/generated/${TEST_FILE_NAME}")
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/ParallelExecutorTest.cpp.in"
     "${TEST_FILE_PATH}"
   )
+  message(STATUS "Configured ${TEST_FILE_PATH}")
 
   add_executable("${TEST_NAME}" "${TEST_FILE_PATH}")
   target_link_libraries("${TEST_NAME}"
@@ -113,6 +117,13 @@ generate_par_exec_test(
   "ParX/SingleThreadedExecutor.hpp"
   ""
   ""
+  "CXX"
+)
+generate_par_exec_test(
+  "ParX::ThreadPoolExecutor"
+  "ParX/ThreadPoolExecutor.hpp"
+  ""
+  "32"
   "CXX"
 )
 generate_par_exec_test(

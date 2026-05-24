@@ -44,24 +44,34 @@ install(
 
 add_custom_target("SingleThreadedExecutor")
 set_target_properties("SingleThreadedExecutor" PROPERTIES
+  PAR_EXEC_NAME "ParX::SingleThreadedExecutor"
   LANGUAGE "CXX"
-  TEMPLATE_PARAMS ""
-  HEADER_FILE "SingleThreadedExecutor.hpp"
+  HEADER_FILE "ParX/SingleThreadedExecutor.hpp"
+)
+add_custom_target("ThreadPoolExecutor")
+set_target_properties("ThreadPoolExecutor" PROPERTIES
+  PAR_EXEC_NAME "ParX::ThreadPoolExecutor"
+  LANGUAGE "CXX"
+  CTOR_PARAMS "CPU_THREADS"
+  HEADER_FILE "ParX/ThreadPoolExecutor.hpp"
 )
 add_custom_target("ThreadPoolTemplateExecutor")
 set_target_properties("ThreadPoolTemplateExecutor" PROPERTIES
+  PAR_EXEC_NAME "ParX::ThreadPoolTemplateExecutor"
   LANGUAGE "CXX"
   TEMPLATE_PARAMS "CPU_THREADS"
-  HEADER_FILE "ThreadPoolExecutor.hpp"
+  HEADER_FILE "ParX/ThreadPoolExecutor.hpp"
 )
 add_custom_target("CudaExecutor")
 set_target_properties("CudaExecutor" PROPERTIES
+  PAR_EXEC_NAME "ParX::CudaExecutor"
   LANGUAGE "CUDA"
   TEMPLATE_PARAMS "CUDA_THREADS_PER_BLOCK"
-  HEADER_FILE "CudaExecutor.cuh"
+  HEADER_FILE "ParX/CudaExecutor.cuh"
 )
 set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
   "SingleThreadedExecutor"
+  "ThreadPoolExecutor"
   "ThreadPoolTemplateExecutor"
   "CudaExecutor"
 )
