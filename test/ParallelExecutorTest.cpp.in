@@ -97,6 +97,7 @@ class ${TEST_NAME} : public testing::Test {
   }
 
   // clang-format off
+  static_assert(ParX::ParallelExecutor<${PAR_EXEC_TYPE}>);
   ${PAR_EXEC_TYPE} par_exec{${CTOR_ARGS}};
 };
 
