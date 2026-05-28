@@ -73,7 +73,6 @@ __global__ void dummy_kernel() {
   basic_reduction(double{}, double{});
 }
 #endif
-}  // namespace detail
 
 template <typename X>
 concept Synchronizable = requires(X x) {
@@ -98,10 +97,12 @@ concept TransformReduceExecutor =
                                                           args...)
       } -> std::convertible_to<T>;
     };
+}  // namespace detail
 
 template <typename X>
 concept ParallelExecutor =
-    Synchronizable<X> and KernelExecutor<X, detail::basic_kernel> and
-    TransformReduceExecutor<X, double, detail::basic_reduction,
-                            detail::basic_transform, double const*>;
+    detail::Synchronizable<X> and
+    detail::KernelExecutor<X, detail::basic_kernel> and
+    detail::TransformReduceExecutor<X, double, detail::basic_reduction,
+                                    detail::basic_transform, double const*>;
 }  // namespace ParX
