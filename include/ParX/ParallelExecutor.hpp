@@ -36,23 +36,6 @@ concept Reduction = requires(T a, T b) {
   { reduce(a, b) } -> std::same_as<T>;
 };
 
-template <auto kernel, typename ParallelExecutor, typename... Args>
-void call_kernel(ParallelExecutor& exe, std::size_t n_items, Args... args)
-  requires Kernel<kernel, Args...>
-{
-  exe.template call_kernel<kernel>(n_items, std::move(args)...);
-}
-
-template <typename T, auto reduce, auto transform, typename ParallelExecutor,
-          typename... TransformArgs>
-T transform_reduce(ParallelExecutor& exe, T init_val, std::size_t n_items,
-                   TransformArgs... transform_args)
-  requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
-{
-  return exe.template transform_reduce<T, reduce, transform>(
-      init_val, n_items, std::move(transform_args)...);
-}
-
 namespace detail {
 // Simple example functions for defining ParallelExecutor concept.
 inline constexpr void basic_kernel(std::size_t) noexcept {}
@@ -105,4 +88,21 @@ concept ParallelExecutor =
     detail::KernelExecutor<X, detail::basic_kernel> and
     detail::TransformReduceExecutor<X, double, detail::basic_reduction,
                                     detail::basic_transform, double const*>;
+
+template <auto kernel, ParallelExecutor X, typename... Args>
+void call_kernel(X& exe, std::size_t n_items, Args... args)
+  requires Kernel<kernel, Args...>
+{
+  exe.template call_kernel<kernel>(n_items, std::move(args)...);
+}
+
+template <typename T, auto reduce, auto transform, ParallelExecutor X,
+          typename... TransformArgs>
+T transform_reduce(X& exe, T init_val, std::size_t n_items,
+                   TransformArgs... transform_args)
+  requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
+{
+  return exe.template transform_reduce<T, reduce, transform>(
+      init_val, n_items, std::move(transform_args)...);
+}
 }  // namespace ParX
