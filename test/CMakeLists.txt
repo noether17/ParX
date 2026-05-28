@@ -127,6 +127,7 @@ foreach(PAR_EXEC IN LISTS PAR_EXECS)
   get_target_property(PAR_EXEC_HEADER "${PAR_EXEC}" "PAR_EXEC_HEADER")
   get_target_property(PAR_EXEC_T_PARAMS "${PAR_EXEC}" "PAR_EXEC_T_PARAMS")
   get_target_property(PAR_EXEC_CTOR_PARAMS "${PAR_EXEC}" "PAR_EXEC_CTOR_PARAMS")
+  # TODO: if(CMAKE_CUDA_COMPILER OR PAR_EXEC_LANG MATCHES CXX)
   generate_par_exec_test_files("${PAR_EXEC_NAME}"
     "${PAR_EXEC_T_PARAMS}"
     ""
