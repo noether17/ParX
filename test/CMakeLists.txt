@@ -21,7 +21,6 @@ if(CMAKE_CUDA_COMPILER)
   )
 else()
   message(STATUS "CUDA is unavailable; skipping CUDA tests.")
-  # TODO: Disable Cuda tests.
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/GenerateTests.cmake")
@@ -36,11 +35,13 @@ foreach(PAR_EXEC IN LISTS PAR_EXECS)
   get_target_property(PAR_EXEC_HEADER "${PAR_EXEC}" "PAR_EXEC_HEADER")
   get_target_property(PAR_EXEC_T_PARAMS "${PAR_EXEC}" "PAR_EXEC_T_PARAMS")
   get_target_property(PAR_EXEC_CTOR_PARAMS "${PAR_EXEC}" "PAR_EXEC_CTOR_PARAMS")
-  # TODO: if(CMAKE_CUDA_COMPILER OR PAR_EXEC_LANG MATCHES CXX)
-  generate_par_exec_test_files("${PAR_EXEC_NAME}"
-    "${PAR_EXEC_T_PARAMS}"
-    ""
-    "${PAR_EXEC_CTOR_PARAMS}"
-    ""
-  )
+  if((PAR_EXEC_LANG MATCHES "CXX") OR
+     (PAR_EXEC_LANG MATCHES "CUDA" AND CMAKE_CUDA_COMPILER))
+    generate_par_exec_test_files("${PAR_EXEC_NAME}"
+      "${PAR_EXEC_T_PARAMS}"
+      ""
+      "${PAR_EXEC_CTOR_PARAMS}"
+      ""
+    )
+  endif()
 endforeach()
