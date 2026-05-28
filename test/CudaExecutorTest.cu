@@ -18,7 +18,7 @@ TEST(CudaExecutorTest, MultiplyTest) {
   }();
   auto const b = a;
   auto c = std::vector<double>(N);
-  auto doer = ParX::CudaExecutor<n_threads_per_block>{};
+  auto executor = ParX::CudaExecutor<n_threads_per_block>{};
 
   auto dev_a = static_cast<double*>(nullptr);
   auto dev_b = static_cast<double*>(nullptr);
@@ -28,7 +28,7 @@ TEST(CudaExecutorTest, MultiplyTest) {
   cudaMalloc(&dev_c, N * sizeof(double));
   cudaMemcpy(dev_a, a.data(), N * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(dev_b, b.data(), N * sizeof(double), cudaMemcpyHostToDevice);
-  call_kernel<multiply_kernel>(doer, N, dev_a, dev_b, dev_c);
+  call_kernel<multiply_kernel>(executor, N, dev_a, dev_b, dev_c);
   cudaMemcpy(c.data(), dev_c, N * sizeof(double), cudaMemcpyDeviceToHost);
   cudaFree(dev_c);
   cudaFree(dev_b);

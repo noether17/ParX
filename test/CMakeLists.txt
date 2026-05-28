@@ -3,30 +3,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Werror -O3")
 
-add_executable(SingleThreadedExecutorTest SingleThreadedExecutorTest.cpp)
-target_link_libraries(SingleThreadedExecutorTest
-  GTest::GTest
-  GTest::Main
-  ParX::ParX
-)
-add_test(NAME SingleThreadedExecutorTest COMMAND SingleThreadedExecutorTest)
-
-add_executable(ThreadPoolExecutorTest ThreadPoolExecutorTest.cpp)
-target_link_libraries(ThreadPoolExecutorTest
-  GTest::GTest
-  GTest::Main
-  ParX::ParX
-)
-add_test(NAME ThreadPoolExecutorTest COMMAND ThreadPoolExecutorTest)
-
-add_executable(ThreadPoolTemplateExecutorTest ThreadPoolTemplateExecutorTest.cpp)
-target_link_libraries(ThreadPoolTemplateExecutorTest
-  GTest::GTest
-  GTest::Main
-  ParX::ParX
-)
-add_test(NAME ThreadPoolTemplateExecutorTest COMMAND ThreadPoolTemplateExecutorTest)
-
 include(CheckLanguage)
 check_language(CUDA)
 if(CMAKE_CUDA_COMPILER)
@@ -43,14 +19,29 @@ if(CMAKE_CUDA_COMPILER)
     -Xcompiler -O3 \
     --expt-relaxed-constexpr"
   )
-
-  add_executable(CudaExecutorTest CudaExecutorTest.cu)
-  target_link_libraries(CudaExecutorTest
-    GTest::GTest
-    GTest::Main
-    ParX::ParX
-  )
-  add_test(NAME CudaExecutorTest COMMAND CudaExecutorTest)
 else()
   message(STATUS "CUDA is unavailable; skipping CUDA tests.")
 endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/GenerateTests.cmake")
+
+set(CPU_THREADS 1 2 4 8 16 32)
+set(CUDA_THREADS_PER_BLOCK 32 64 128 256 512 1024)
+
+get_property(PAR_EXECS GLOBAL PROPERTY PARALLEL_EXECUTORS)
+foreach(PAR_EXEC IN LISTS PAR_EXECS)
+  get_target_property(PAR_EXEC_NAME "${PAR_EXEC}" "PAR_EXEC_NAME")
+  get_target_property(PAR_EXEC_LANG "${PAR_EXEC}" "PAR_EXEC_LANG")
+  get_target_property(PAR_EXEC_HEADER "${PAR_EXEC}" "PAR_EXEC_HEADER")
+  get_target_property(PAR_EXEC_T_PARAMS "${PAR_EXEC}" "PAR_EXEC_T_PARAMS")
+  get_target_property(PAR_EXEC_CTOR_PARAMS "${PAR_EXEC}" "PAR_EXEC_CTOR_PARAMS")
+  if((PAR_EXEC_LANG MATCHES "CXX") OR
+     (PAR_EXEC_LANG MATCHES "CUDA" AND CMAKE_CUDA_COMPILER))
+    generate_par_exec_test_files("${PAR_EXEC_NAME}"
+      "${PAR_EXEC_T_PARAMS}"
+      ""
+      "${PAR_EXEC_CTOR_PARAMS}"
+      ""
+    )
+  endif()
+endforeach()

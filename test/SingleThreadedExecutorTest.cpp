@@ -17,9 +17,9 @@ TEST(SingleThreadedExecutorTest, MultiplyTest) {
   }();
   auto const b = a;
   auto c = std::vector<double>(N);
-  auto doer = ParX::SingleThreadedExecutor{};
+  auto executor = ParX::SingleThreadedExecutor{};
 
-  call_kernel<multiply_kernel>(doer, N, a.data(), b.data(), c.data());
+  call_kernel<multiply_kernel>(executor, N, a.data(), b.data(), c.data());
 
   for (auto i = 0; i < N; ++i) {
     EXPECT_DOUBLE_EQ(a[i] * b[i], c[i]);

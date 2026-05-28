@@ -1,0 +1,134 @@
+#include <gtest/gtest.h>
+
+#include <cstddef>
+#include <numeric>
+#include <vector>
+
+#include "ParX/ParallelExecutor.hpp"
+
+// clang-format off
+#include "${PAR_EXEC_HEADER}"
+
+class ${TEST_NAME} : public testing::Test {
+  // clang-format on
+ public:
+  // Kernel definitions must be public to allow use with CUDA.
+  using ElementType = std::ptrdiff_t;
+  static constexpr void add_kernel(std::size_t index, ElementType const* a,
+                                   ElementType const* b, ElementType* c) {
+    c[index] = a[index] + b[index];
+  }
+
+  static constexpr auto add_reduction(ElementType a, ElementType b) {
+    return a + b;
+  }
+
+  static constexpr auto multiply_transform(
+      std::size_t index, ElementType const* a, ElementType const* b) {
+    return a[index] * b[index];
+  }
+
+ protected:
+  static constexpr auto large_prime =
+      1'000'003ul;  // This is the first prime number greater than 1,000,000.
+                    // The goal of using this number is to test large tasks that
+                    // can't be evenly divided among multiple threads.
+
+  static auto generate_reference_vector(std::size_t n) {
+    auto v = std::vector<ElementType>(n);
+    std::iota(std::begin(v), std::end(v), static_cast<ElementType>(1));
+    return v;
+  }
+
+  auto vector_sum(std::span<ElementType const> a,
+                  std::span<ElementType const> b) {
+    auto c = std::vector<ElementType>(a.size());
+#ifndef __CUDACC__
+    ParX::call_kernel<add_kernel>(par_exec, a.size(), a.data(), b.data(),
+                                  c.data());
+#else
+    auto dev_a = static_cast<ElementType*>(nullptr);
+    auto dev_b = static_cast<ElementType*>(nullptr);
+    auto dev_c = static_cast<ElementType*>(nullptr);
+    cudaMalloc(&dev_a, a.size() * sizeof(ElementType));
+    cudaMalloc(&dev_b, b.size() * sizeof(ElementType));
+    cudaMalloc(&dev_c, c.size() * sizeof(ElementType));
+    cudaMemcpy(dev_a, a.data(), a.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b.data(), b.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice);
+    ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a, dev_b, dev_c);
+    cudaMemcpy(c.data(), dev_c, c.size() * sizeof(ElementType),
+               cudaMemcpyDeviceToHost);
+    cudaFree(dev_c);
+    cudaFree(dev_b);
+    cudaFree(dev_a);
+#endif
+    return c;
+  }
+
+  auto scalar_product(std::span<ElementType const> a,
+                      std::span<ElementType const> b) {
+#ifndef __CUDACC__
+    return ParX::transform_reduce<ElementType, add_reduction,
+                                  multiply_transform>(
+        par_exec, ElementType{}, a.size(), a.data(), b.data());
+#else
+    auto dev_a = static_cast<ElementType*>(nullptr);
+    auto dev_b = static_cast<ElementType*>(nullptr);
+    cudaMalloc(&dev_a, a.size() * sizeof(ElementType));
+    cudaMalloc(&dev_b, b.size() * sizeof(ElementType));
+    cudaMemcpy(dev_a, a.data(), a.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b.data(), b.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice);
+    auto result =
+        ParX::transform_reduce<ElementType, add_reduction, multiply_transform>(
+            par_exec, ElementType{}, a.size(), dev_a, dev_b);
+    cudaFree(dev_b);
+    cudaFree(dev_a);
+    return result;
+#endif
+  }
+
+  // Closed-form expression for the sum of the squares of integers from 1 to n.
+  static constexpr auto sum_of_squares(ElementType n) {
+    return n * (n + 1) * (2 * n + 1) / 6;
+  }
+
+  // clang-format off
+  ${PAR_EXEC_TYPE} par_exec{${CTOR_ARGS}};
+};
+
+TEST_F(${TEST_NAME}, SingleSumTest) {
+  // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
+  // should still produce the correct result.
+  auto const a = generate_reference_vector(1);
+  auto const result = vector_sum(a, a);
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    EXPECT_EQ(a[i] + a[i], result[i]);
+  }
+}
+
+TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
+  auto const a = generate_reference_vector(large_prime);
+  auto const result = vector_sum(a, a);
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    EXPECT_EQ(a[i] + a[i], result[i]);
+  }
+}
+
+TEST_F(${TEST_NAME}, SingleScalarProductTest) {
+  // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
+  // should still produce the correct result.
+  auto const a = generate_reference_vector(1);
+  auto const result = scalar_product(a, a);
+  EXPECT_EQ(sum_of_squares(1), result);
+}
+
+TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
+  auto const a = generate_reference_vector(large_prime);
+  auto const result = scalar_product(a, a);
+  EXPECT_EQ(sum_of_squares(large_prime), result);
+}
+// clang-format on
