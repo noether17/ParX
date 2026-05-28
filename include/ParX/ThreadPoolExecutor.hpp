@@ -114,6 +114,9 @@ class ThreadPoolExecutor {
                            thread_partial_results.end(), init_val, reduce);
   }
 
+  // call_kernel() is already synchronous.
+  void synchronize() const {}
+
   constexpr auto n_threads() const { return std::ssize(m_threads); }
 
  private:

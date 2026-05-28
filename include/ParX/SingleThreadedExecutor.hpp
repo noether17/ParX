@@ -27,5 +27,7 @@ struct SingleThreadedExecutor {
     }
     return result;
   }
+
+  void synchronize() const {}
 };
 }  // namespace ParX

@@ -52,4 +52,56 @@ T transform_reduce(ParallelExecutor& exe, T init_val, std::size_t n_items,
   return exe.template transform_reduce<T, reduce, transform>(
       init_val, n_items, std::move(transform_args)...);
 }
+
+namespace detail {
+// Simple example functions for defining ParallelExecutor concept.
+inline constexpr void basic_kernel(std::size_t) noexcept {}
+inline constexpr auto basic_transform(std::size_t index, double const* array) {
+  return array[index];
+}
+inline constexpr auto basic_reduction(double a, double b) { return a + b; }
+
+#ifdef __CUDACC__
+// This CUDA kernel exists purely to ensure the above operations are compiled
+// for the device. Without it, the ParallelExecutor concept would erroneously
+// fail for CUDA-based ParallelExecutors. This step is not necessary for
+// user-defined operations, since those are not explicitly checked by the
+// ParallelExecutor concept.
+__global__ void dummy_kernel() {
+  basic_kernel(std::size_t{});
+  basic_transform(std::size_t{}, (double*){});
+  basic_reduction(double{}, double{});
+}
+#endif
+}  // namespace detail
+
+template <typename X>
+concept Synchronizable = requires(X x) {
+  { std::as_const(x).synchronize() } -> std::same_as<void>;
+};
+
+template <typename X, auto kernel, typename... KArgs>
+concept KernelExecutor =
+    Kernel<kernel, KArgs...> and requires(X& x, KArgs... args) {
+      {
+        x.template call_kernel<kernel>(std::size_t{}, args...)
+      } -> std::same_as<void>;
+    } and true;
+
+template <typename X, typename T, auto reduce, auto transform,
+          typename... TArgs>
+concept TransformReduceExecutor =
+    Reduction<reduce, T> and Transform<transform, T, TArgs...> and
+    requires(X& x, TArgs... args) {
+      {
+        x.template transform_reduce<T, reduce, transform>(T{}, std::size_t{},
+                                                          args...)
+      } -> std::convertible_to<T>;
+    };
+
+template <typename X>
+concept ParallelExecutor =
+    Synchronizable<X> and KernelExecutor<X, detail::basic_kernel> and
+    TransformReduceExecutor<X, double, detail::basic_reduction,
+                            detail::basic_transform, double const*>;
 }  // namespace ParX
