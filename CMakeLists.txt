@@ -75,16 +75,6 @@ set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
   "ThreadPoolTemplateExecutor"
   "CudaExecutor"
 )
-get_property(PAR_EXECS GLOBAL PROPERTY PARALLEL_EXECUTORS)
-foreach(PAR_EXEC IN LISTS PAR_EXECS)
-  message(STATUS "Reading ${PAR_EXEC} from list PAR_EXECS")
-  get_target_property(PAR_EXEC_LANG "${PAR_EXEC}" "LANGUAGE")
-  message(STATUS "  ${PAR_EXEC}::LANGUAGE: ${PAR_EXEC_LANG}")
-  get_target_property(PAR_EXEC_TMP_PARAMS "${PAR_EXEC}" "TEMPLATE_PARAMS")
-  message(STATUS "  ${PAR_EXEC}::TEMPLATE_PARAMS: ${PAR_EXEC_TMP_PARAMS}")
-  get_target_property(PAR_EXEC_HEADER "${PAR_EXEC}" "HEADER_FILE")
-  message(STATUS "  ${PAR_EXEC}::HEADER_FILE: ${PAR_EXEC_HEADER}")
-endforeach()
 
 enable_testing()
 find_package(GTest 1.14.0 REQUIRED)
