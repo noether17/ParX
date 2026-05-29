@@ -78,7 +78,10 @@ class MultiReaderQueue {
 
   auto stop() {
     SCOPED_LOG();
-    stop_flag_ = true;
+    {
+      auto write_lock = std::unique_lock{mx_};
+      stop_flag_ = true;
+    }
     read_cv_.notify_all();
     empty_cv_.notify_all();
   }
@@ -89,7 +92,7 @@ class MultiReaderQueue {
   std::shared_mutex mutable mx_{};
   std::condition_variable_any mutable read_cv_{};   // signals value available.
   std::condition_variable_any mutable empty_cv_{};  // signals empty data_.
-  std::atomic_bool stop_flag_{};
+  bool stop_flag_{};
 };
 
 struct Task {
