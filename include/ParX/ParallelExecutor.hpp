@@ -37,22 +37,29 @@ concept Reduction = requires(T a, T b) {
 };
 
 namespace detail {
-// Simple example functions for defining ParallelExecutor concept.
-inline constexpr void basic_kernel(std::size_t) noexcept {}
-inline constexpr auto basic_transform(std::size_t index, double const* array) {
-  return array[index];
-}
+/* Basic example functions for defining the ParallelExecutor concept. The
+ * concept cannot check every conceivable instantiation of the call_kernel and
+ * transform_reduce member function templates, so it only checks for a single
+ * instantiation using the following minimal definitions:
+ *   * basic_kernel() takes an index parameter and does nothing.
+ *   * basic_transform() takes an index parameter and returns a value.
+ *   * basic_reduction() takes two value parameters and returns a new value.
+ */
+inline constexpr void basic_kernel(std::size_t) {}
+inline constexpr auto basic_transform(std::size_t) { return double{}; }
 inline constexpr auto basic_reduction(double a, double b) { return a + b; }
 
 #ifdef __CUDACC__
-// This CUDA kernel exists purely to ensure the above operations are compiled
-// for the device. Without it, the ParallelExecutor concept would erroneously
-// fail for CUDA-based ParallelExecutors. This step is not necessary for
-// user-defined operations, since those are not explicitly checked by the
-// ParallelExecutor concept.
+/* This CUDA kernel exists solely to ensure that the above operations are
+ * compiled for the device. Without it, the ParallelExecutor concept would
+ * erroneously fail for CUDA-based ParallelExecutors.
+ *
+ * This step is not necessary for user-defined operations, since they are not
+ * checked by the ParallelExecutor concept.
+ */
 __global__ void dummy_kernel() {
   basic_kernel(std::size_t{});
-  basic_transform(std::size_t{}, (double*){});
+  basic_transform(std::size_t{});
   basic_reduction(double{}, double{});
 }
 #endif
@@ -68,7 +75,7 @@ concept KernelExecutor =
       {
         x.template call_kernel<kernel>(std::size_t{}, args...)
       } -> std::same_as<void>;
-    } and true;
+    };
 
 template <typename X, typename T, auto reduce, auto transform,
           typename... TArgs>
@@ -87,7 +94,7 @@ concept ParallelExecutor =
     detail::Synchronizable<X> and
     detail::KernelExecutor<X, detail::basic_kernel> and
     detail::TransformReduceExecutor<X, double, detail::basic_reduction,
-                                    detail::basic_transform, double const*>;
+                                    detail::basic_transform>;
 
 template <auto kernel, ParallelExecutor X, typename... Args>
 void call_kernel(X& exe, std::size_t n_items, Args... args)
