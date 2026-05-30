@@ -95,7 +95,7 @@ concept TransformReduceExecutor =
 
 template <typename X>
 concept Synchronizable = requires(X x) {
-  { x.synchronize() } -> std::same_as<void>;
+  { std::as_const(x).synchronize() } -> std::same_as<void>;
 };
 }  // namespace detail
 
@@ -128,10 +128,10 @@ T transform_reduce(X& exe, T init_val, std::size_t n_items,
  * ParallelExecutor.
  */
 template <ParallelExecutor X>
-void synchronize(X&&) {}
+void synchronize(X const&) {}
 
 template <ParallelExecutor X>
-void synchronize(X&& x)
+void synchronize(X const& x)
   requires detail::Synchronizable<X>
 {
   x.synchronize();
