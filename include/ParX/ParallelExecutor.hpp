@@ -64,11 +64,6 @@ __global__ void dummy_kernel() {
 }
 #endif
 
-template <typename X>
-concept Synchronizable = requires(X x) {
-  { std::as_const(x).synchronize() } -> std::same_as<void>;
-};
-
 template <typename X, auto kernel, typename... KArgs>
 concept KernelExecutor =
     Kernel<kernel, KArgs...> and requires(X& x, KArgs... args) {
@@ -87,11 +82,15 @@ concept TransformReduceExecutor =
                                                           args...)
       } -> std::convertible_to<T>;
     };
+
+template <typename X>
+concept Synchronizable = requires(X x) {
+  { x.synchronize() } -> std::same_as<void>;
+};
 }  // namespace detail
 
 template <typename X>
 concept ParallelExecutor =
-    detail::Synchronizable<X> and
     detail::KernelExecutor<X, detail::basic_kernel> and
     detail::TransformReduceExecutor<X, double, detail::basic_reduction,
                                     detail::basic_transform>;
@@ -111,5 +110,20 @@ T transform_reduce(X& exe, T init_val, std::size_t n_items,
 {
   return exe.template transform_reduce<T, reduce, transform>(
       init_val, n_items, std::move(transform_args)...);
+}
+
+/* ParallelExecutors for which call_kernel is asynchronous may require manual
+ * synchronization. The following function templates allow users to request
+ * synchronization if a synchronize() member function is provided by the
+ * ParallelExecutor.
+ */
+template <ParallelExecutor X>
+void synchronize(X&&) {}
+
+template <ParallelExecutor X>
+void synchronize(X&& x)
+  requires detail::Synchronizable<X>
+{
+  x.synchronize();
 }
 }  // namespace ParX

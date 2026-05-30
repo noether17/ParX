@@ -123,7 +123,5 @@ class CudaExecutor {
 
     return reduce(init_val, result);
   }
-
-  void synchronize() const { cudaDeviceSynchronize(); }
 };
 }  // namespace ParX
