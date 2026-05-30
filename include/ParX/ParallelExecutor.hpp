@@ -46,8 +46,16 @@ namespace detail {
  *   * basic_reduction() takes two value parameters and returns a new value.
  */
 inline constexpr void basic_kernel(std::size_t) {}
-inline constexpr auto basic_transform(std::size_t) { return double{}; }
-inline constexpr auto basic_reduction(double a, double b) { return a + b; }
+
+template <typename T>
+inline constexpr auto basic_transform(std::size_t) {
+  return T{};
+}
+
+template <typename T>
+inline constexpr auto basic_reduction(T a, T b) {
+  return a + b;
+}
 
 #ifdef __CUDACC__
 /* This CUDA kernel exists solely to ensure that the above operations are
@@ -57,11 +65,13 @@ inline constexpr auto basic_reduction(double a, double b) { return a + b; }
  * This step is not necessary for user-defined operations, since they are not
  * checked by the ParallelExecutor concept.
  */
+template <typename T>
 __global__ void dummy_kernel() {
   basic_kernel(std::size_t{});
-  basic_transform(std::size_t{});
-  basic_reduction(double{}, double{});
+  basic_transform<T>(std::size_t{});
+  basic_reduction(T{}, T{});
 }
+template __global__ void dummy_kernel<double>();
 #endif
 
 template <typename X, auto kernel, typename... KArgs>
@@ -85,15 +95,15 @@ concept TransformReduceExecutor =
 
 template <typename X>
 concept Synchronizable = requires(X x) {
-  { x.synchronize() } -> std::same_as<void>;
+  { std::as_const(x).synchronize() } -> std::same_as<void>;
 };
 }  // namespace detail
 
 template <typename X>
 concept ParallelExecutor =
     detail::KernelExecutor<X, detail::basic_kernel> and
-    detail::TransformReduceExecutor<X, double, detail::basic_reduction,
-                                    detail::basic_transform>;
+    detail::TransformReduceExecutor<X, double, detail::basic_reduction<double>,
+                                    detail::basic_transform<double>>;
 
 template <auto kernel, ParallelExecutor X, typename... Args>
 void call_kernel(X& exe, std::size_t n_items, Args... args)
@@ -118,10 +128,10 @@ T transform_reduce(X& exe, T init_val, std::size_t n_items,
  * ParallelExecutor.
  */
 template <ParallelExecutor X>
-void synchronize(X&&) {}
+void synchronize(X const&) {}
 
 template <ParallelExecutor X>
-void synchronize(X&& x)
+void synchronize(X const& x)
   requires detail::Synchronizable<X>
 {
   x.synchronize();

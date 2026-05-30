@@ -20,6 +20,20 @@ set_target_properties("ThreadPoolTemplateExecutor" PROPERTIES
   PAR_EXEC_HEADER "ParX/ThreadPoolExecutor.hpp"
   PAR_EXEC_T_PARAMS "CPU_THREADS"
 )
+add_custom_target("AsyncThreadPoolExecutor")
+set_target_properties("AsyncThreadPoolExecutor" PROPERTIES
+  PAR_EXEC_NAME "ParX::AsyncThreadPoolExecutor"
+  PAR_EXEC_LANG "CXX"
+  PAR_EXEC_HEADER "ParX/AsyncThreadPoolExecutor.hpp"
+  PAR_EXEC_CTOR_PARAMS "CPU_THREADS"
+)
+add_custom_target("AsyncThreadPoolTemplateExecutor")
+set_target_properties("AsyncThreadPoolTemplateExecutor" PROPERTIES
+  PAR_EXEC_NAME "ParX::AsyncThreadPoolTemplateExecutor"
+  PAR_EXEC_LANG "CXX"
+  PAR_EXEC_HEADER "ParX/AsyncThreadPoolExecutor.hpp"
+  PAR_EXEC_T_PARAMS "CPU_THREADS"
+)
 add_custom_target("CudaExecutor")
 set_target_properties("CudaExecutor" PROPERTIES
   PAR_EXEC_NAME "ParX::CudaExecutor"
@@ -31,5 +45,7 @@ set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
   "SingleThreadedExecutor"
   "ThreadPoolExecutor"
   "ThreadPoolTemplateExecutor"
+  "AsyncThreadPoolExecutor"
+  "AsyncThreadPoolTemplateExecutor"
   "CudaExecutor"
 )
