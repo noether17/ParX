@@ -64,7 +64,7 @@ class ${TEST_NAME} : public testing::Test {
     cudaFree(dev_b);
     cudaFree(dev_a);
 #endif
-    par_exec.synchronize();
+    synchronize(par_exec);
     return c;
   }
 
