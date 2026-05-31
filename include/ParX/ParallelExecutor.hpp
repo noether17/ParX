@@ -57,10 +57,13 @@ inline constexpr auto basic_reduction(T a, T b) {
   return a + b;
 }
 
+using TestValueType = double;
+
 #ifdef __CUDACC__
 /* This CUDA kernel exists solely to ensure that the above operations are
  * compiled for the device. Without it, the ParallelExecutor concept would
- * erroneously fail for CUDA-based ParallelExecutors.
+ * erroneously fail for CUDA-based ParallelExecutors. It is defined as a
+ * template to prevent ODR violation.
  *
  * This step is not necessary for user-defined operations, since they are not
  * checked by the ParallelExecutor concept.
@@ -71,7 +74,7 @@ __global__ void dummy_kernel() {
   basic_transform<T>(std::size_t{});
   basic_reduction(T{}, T{});
 }
-template __global__ void dummy_kernel<double>();
+template __global__ void dummy_kernel<TestValueType>();
 #endif
 
 template <typename X, auto kernel, typename... KArgs>
@@ -99,11 +102,27 @@ concept Synchronizable = requires(X x) {
 };
 }  // namespace detail
 
+/* A ParallelExecutor is a type which provides the call_kernel() and
+ * transform_reduce() member function templates for executing arbitrary kernel
+ * and transform-reduce operations. Adherence to the concept is checked by
+ * attempting to instantiate the required member function templates with basic
+ * operations.
+ */
 template <typename X>
-concept ParallelExecutor =
-    detail::KernelExecutor<X, detail::basic_kernel> and
-    detail::TransformReduceExecutor<X, double, detail::basic_reduction<double>,
-                                    detail::basic_transform<double>>;
+concept ParallelExecutor = detail::KernelExecutor<X, detail::basic_kernel> and
+                           detail::TransformReduceExecutor<
+                               X, detail::TestValueType,
+                               detail::basic_reduction<detail::TestValueType>,
+                               detail::basic_transform<detail::TestValueType>>;
+
+/* An AsyncParallelExecutor is a ParallelExecutor that provides a synchronize()
+ * member function to synchronize asynchronous calls to the call_kernel() member
+ * function template. (All calls to the transform_reduce() member function
+ * template are synchronous, since it returns a result to the caller.)
+ */
+template <typename X>
+concept AsyncParallelExecutor =
+    ParallelExecutor<X> and detail::Synchronizable<X>;
 
 template <auto kernel, ParallelExecutor X, typename... Args>
 void call_kernel(X& exe, std::size_t n_items, Args... args)
@@ -130,10 +149,8 @@ T transform_reduce(X& exe, T init_val, std::size_t n_items,
 template <ParallelExecutor X>
 void synchronize(X const&) {}
 
-template <ParallelExecutor X>
-void synchronize(X const& x)
-  requires detail::Synchronizable<X>
-{
+template <AsyncParallelExecutor X>
+void synchronize(X const& x) {
   x.synchronize();
 }
 }  // namespace ParX
