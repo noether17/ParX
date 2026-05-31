@@ -12,7 +12,7 @@
 
 namespace ParX {
 template <typename Predicate>
-bool spinlock(std::stop_token& stop_token, Predicate pred) {
+bool busy_waiter(std::stop_token& stop_token, Predicate pred) {
   for (auto trial = 0; not stop_token.stop_requested(); ++trial) {
     if (pred()) {
       return true;
@@ -36,7 +36,7 @@ class ThreadPoolExecutor {
             auto thread_begin = std::size_t{};
             auto thread_end = std::size_t{};
             while (true) {
-              if (not spinlock(stop_token, [this, thread_id] {
+              if (not busy_waiter(stop_token, [this, thread_id] {
                     return m_task_ready_flags[thread_id].load();
                   })) {
                 return;
