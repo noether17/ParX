@@ -68,8 +68,8 @@ class ThreadPoolExecutor {
   {
     auto latch = std::latch{std::ssize(m_threads)};
     m_n_items = n_items;
-    m_task = [&latch, ... args = std::move(args)](int thread_begin,
-                                                  int thread_end) {
+    m_task = [&latch, ... args = std::move(args)](std::size_t thread_begin,
+                                                  std::size_t thread_end) {
       for (auto i = thread_begin; i < thread_end; ++i) {
         kernel(i, args...);
       }
@@ -82,7 +82,7 @@ class ThreadPoolExecutor {
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
-  static constexpr void transform_reduce_kernel(int thread_id,
+  static constexpr void transform_reduce_kernel(std::size_t thread_id,
                                                 T* thread_partial_results,
                                                 std::size_t n_items,
                                                 std::size_t n_items_per_thread,
