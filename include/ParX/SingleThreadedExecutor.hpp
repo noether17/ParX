@@ -11,7 +11,7 @@ struct SingleThreadedExecutor {
     requires Kernel<kernel, Args...>
   {
     for (std::size_t i = 0; i < n_items; ++i) {
-      kernel(i, std::move(args)...);
+      kernel(i, args...);
     }
   }
 
@@ -22,7 +22,7 @@ struct SingleThreadedExecutor {
   {
     auto result = init_val;
     for (std::size_t i = 0; i < n_items; ++i) {
-      auto transform_result = transform(i, std::move(transform_args)...);
+      auto transform_result = transform(i, transform_args...);
       result = reduce(result, transform_result);
     }
     return result;
