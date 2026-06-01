@@ -44,7 +44,9 @@ install(
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/ParallelExecutors.cmake")
 
-enable_testing()
-find_package(GTest 1.14.0 REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
-add_subdirectory(test)
+option(PARX_BUILD_TESTS "Build ParX tests" ON)
+if(PARX_BUILD_TESTS)
+  find_package(GTest 1.14.0 REQUIRED)
+  enable_testing()
+  add_subdirectory(test)
+endif()
