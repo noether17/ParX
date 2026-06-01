@@ -69,10 +69,10 @@ class MultiReaderQueue {
       auto read_lock = std::shared_lock{mx_};
       empty_cv_.wait(read_lock,
                      [this] { return not data_.has_value() or stop_flag_; });
-    }
-    if (stop_flag_) {
-      FUNCTION_LOG("stopping.");
-      return;
+      if (stop_flag_) {
+        FUNCTION_LOG("stopping.");
+        return;
+      }
     }
   }
 
