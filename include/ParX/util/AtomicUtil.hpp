@@ -11,4 +11,4 @@ constexpr void atomic_add(T* a_ptr, T b) {
   atomicAdd(a_ptr, b);
 #endif
 }
-}  // namespace au
+}  // namespace ParX
