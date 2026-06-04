@@ -4,6 +4,7 @@
 #include <functional>
 #include <latch>
 #include <numeric>
+#include <optional>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -82,20 +83,22 @@ class ThreadPoolExecutor {
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
-  static constexpr void transform_reduce_kernel(std::size_t thread_id,
-                                                T* thread_partial_results,
-                                                std::size_t n_items,
-                                                std::size_t n_items_per_thread,
-                                                TransformArgs... transform_args)
+  static constexpr void transform_reduce_kernel(
+      std::size_t thread_id, std::optional<T>* thread_partial_results,
+      std::size_t n_items, std::size_t n_items_per_thread,
+      TransformArgs... transform_args)
     requires(Reduction<reduce, T> and Transform<transform, T, TransformArgs...>)
   {
-    auto thread_partial_result = T{};
-    for (auto i = thread_id * n_items_per_thread;
-         i < (thread_id + 1) * n_items_per_thread and i < n_items; ++i) {
-      auto transform_result = transform(i, transform_args...);
-      thread_partial_result = reduce(thread_partial_result, transform_result);
+    if (auto const initial_index = thread_id * n_items_per_thread;
+        initial_index < n_items) {
+      auto thread_partial_result = transform(initial_index, transform_args...);
+      for (auto i = initial_index + 1;
+           i < initial_index + n_items_per_thread and i < n_items; ++i) {
+        auto transform_result = transform(i, transform_args...);
+        thread_partial_result = reduce(thread_partial_result, transform_result);
+      }
+      thread_partial_results[thread_id] = thread_partial_result;
     }
-    thread_partial_results[thread_id] = thread_partial_result;
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
@@ -104,14 +107,20 @@ class ThreadPoolExecutor {
     requires(Reduction<reduce, T> and Transform<transform, T, TransformArgs...>)
   {
     auto const n_threads = std::ssize(m_threads);
-    auto thread_partial_results = std::vector<T>(n_threads);
+    auto thread_partial_results = std::vector<std::optional<T>>(n_threads);
     auto n_items_per_thread = (n_items + n_threads - 1) / n_threads;
     call_kernel<
         transform_reduce_kernel<T, reduce, transform, TransformArgs...>>(
         n_threads, thread_partial_results.data(), n_items, n_items_per_thread,
         transform_args...);
-    return std::accumulate(thread_partial_results.begin(),
-                           thread_partial_results.end(), init_val, reduce);
+    auto result = init_val;
+    for (auto partial_result_iter = thread_partial_results.begin();
+         partial_result_iter != thread_partial_results.end() and
+         (*partial_result_iter).has_value();
+         ++partial_result_iter) {
+      result = reduce(result, (*partial_result_iter).value());
+    }
+    return result;
   }
 
   constexpr auto n_threads() const { return std::ssize(m_threads); }

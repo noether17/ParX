@@ -25,21 +25,27 @@ __global__ void cuda_transform_reduce(T* block_results, std::size_t n_items,
   requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
 {
   __shared__ T cache[block_size];
-  auto thread_result = T{};
-  auto i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
-  auto cache_index = threadIdx.x;
+  auto const block_base_index = blockIdx.x * blockDim.x;
+  auto const cache_index = threadIdx.x;
+  auto i = static_cast<std::size_t>(block_base_index + cache_index);
+  auto const grid_stride = blockDim.x * gridDim.x;
+  if (i < n_items) {
+    cache[cache_index] = transform(i, transform_args...);
+    i += grid_stride;
+  }
   while (i < n_items) {
     auto transform_result = transform(i, transform_args...);
-    thread_result = reduce(thread_result, transform_result);
-    i += blockDim.x * gridDim.x;
+    cache[cache_index] = reduce(cache[cache_index], transform_result);
+    i += grid_stride;
   }
 
-  cache[cache_index] = thread_result;
   __syncthreads();
-  for (auto stride = blockDim.x / 2; stride > 0; stride /= 2) {
-    if (cache_index < stride) {
+  for (auto block_stride = blockDim.x / 2; block_stride > 0;
+       block_stride /= 2) {
+    if (cache_index < block_stride and
+        block_base_index + cache_index + block_stride < n_items) {
       cache[cache_index] =
-          reduce(cache[cache_index], cache[cache_index + stride]);
+          reduce(cache[cache_index], cache[cache_index + block_stride]);
     }
     __syncthreads();
   }
@@ -55,24 +61,27 @@ __global__ void cuda_transform_reduce_final(T* result, T const* block_results,
   requires Reduction<reduce, T>
 {
   __shared__ T cache[block_size];
-  auto thread_result = T{};
-  auto i = threadIdx.x;  // final reduction step is always single block
+  auto const cache_index = threadIdx.x;
+  auto i = cache_index;  // final reduction step is always single block
+  if (i < n_block_results) {
+    cache[cache_index] = block_results[i];
+    i += blockDim.x;
+  }
   while (i < n_block_results) {
-    thread_result = reduce(thread_result, block_results[i]);
+    cache[cache_index] = reduce(cache[cache_index], block_results[i]);
     i += blockDim.x;
   }
 
-  cache[threadIdx.x] = thread_result;
   __syncthreads();
   for (auto stride = blockDim.x / 2; stride > 0; stride /= 2) {
-    if (threadIdx.x < stride) {
-      cache[threadIdx.x] =
-          reduce(cache[threadIdx.x], cache[threadIdx.x + stride]);
+    if (cache_index < stride and cache_index + stride < n_block_results) {
+      cache[cache_index] =
+          reduce(cache[cache_index], cache[cache_index + stride]);
     }
     __syncthreads();
   }
 
-  if (threadIdx.x == 0) {
+  if (cache_index == 0) {
     *result = cache[0];
   }
 }
