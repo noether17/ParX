@@ -6,6 +6,8 @@ function(generate_par_exec_test
     TEMPLATE_ARGS
     CTOR_ARGS
     PAR_EXEC_LANG
+    TEST_TEMPLATE
+    TEST_SUFFIX
   )
   if(TEMPLATE_ARGS)
     set(PAR_EXEC_TYPE "${PAR_EXEC}<${TEMPLATE_ARGS}>")
@@ -27,10 +29,10 @@ function(generate_par_exec_test
   set(PAR_EXEC_SPEC "${PAR_EXEC_TYPE_TOKEN}_${CTOR_ARGS}")
   string(REGEX REPLACE ", *" "_" PAR_EXEC_SPEC "${PAR_EXEC_SPEC}")
   string(REGEX REPLACE "_$" "" PAR_EXEC_SPEC "${PAR_EXEC_SPEC}")
-  set(TEST_NAME "${PAR_EXEC_SPEC}_Test")
+  set(TEST_NAME "${PAR_EXEC_SPEC}_${TEST_SUFFIX}Test")
   set(TEST_FILE_NAME "${TEST_NAME}.${TEST_FILE_EXT}")
   set(TEST_FILE_PATH "${CMAKE_CURRENT_BINARY_DIR}/generated/${TEST_FILE_NAME}")
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/ParallelExecutorTest.cpp.in"
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/${TEST_TEMPLATE}"
     "${TEST_FILE_PATH}"
   )
   message(STATUS "Configured ${TEST_FILE_PATH}")
@@ -50,6 +52,8 @@ function(generate_par_exec_test_files
     PARTIAL_TEMPLATE_ARGS
     CTOR_PARAM_GROUPS
     PARTIAL_CTOR_ARGS
+    TEST_TEMPLATE
+    TEST_SUFFIX
   )
   if(TEMPLATE_PARAM_GROUPS)
     list(POP_FRONT TEMPLATE_PARAM_GROUPS CURRENT_TEMPLATE_PARAM)
@@ -64,6 +68,8 @@ function(generate_par_exec_test_files
         "${CURRENT_TEMPLATE_ARGS}"
         "${CTOR_PARAM_GROUPS}"
         "${PARTIAL_CTOR_ARGS}"
+        "${TEST_TEMPLATE}"
+        "${TEST_SUFFIX}"
       )
     endforeach()
   else()
@@ -80,6 +86,8 @@ function(generate_par_exec_test_files
           "${PARTIAL_TEMPLATE_ARGS}"
           "${CTOR_PARAM_GROUPS}"
           "${CURRENT_CTOR_ARGS}"
+          "${TEST_TEMPLATE}"
+          "${TEST_SUFFIX}"
         )
       endforeach()
     else()
@@ -88,6 +96,8 @@ function(generate_par_exec_test_files
         "${PARTIAL_TEMPLATE_ARGS}"
         "${PARTIAL_CTOR_ARGS}"
         "${PAR_EXEC_LANG}"
+        "${TEST_TEMPLATE}"
+        "${TEST_SUFFIX}"
       )
     endif()
   endif()

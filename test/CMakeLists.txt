@@ -31,6 +31,7 @@ foreach(PAR_EXEC IN LISTS PAR_EXECS)
   get_target_property(PAR_EXEC_HEADER "${PAR_EXEC}" "PAR_EXEC_HEADER")
   get_target_property(PAR_EXEC_T_PARAMS "${PAR_EXEC}" "PAR_EXEC_T_PARAMS")
   get_target_property(PAR_EXEC_CTOR_PARAMS "${PAR_EXEC}" "PAR_EXEC_CTOR_PARAMS")
+  get_target_property(PAR_EXEC_IS_ASYNC "${PAR_EXEC}" "PAR_EXEC_IS_ASYNC")
   if((PAR_EXEC_LANG MATCHES "CXX") OR
      (PAR_EXEC_LANG MATCHES "CUDA" AND CMAKE_CUDA_COMPILER))
     generate_par_exec_test_files("${PAR_EXEC_NAME}"
@@ -38,6 +39,18 @@ foreach(PAR_EXEC IN LISTS PAR_EXECS)
       ""
       "${PAR_EXEC_CTOR_PARAMS}"
       ""
+      "ParallelExecutorTest.cpp.in"
+      ""
     )
+    if(PAR_EXEC_IS_ASYNC)
+      generate_par_exec_test_files("${PAR_EXEC_NAME}"
+        "${PAR_EXEC_T_PARAMS}"
+        ""
+        "${PAR_EXEC_CTOR_PARAMS}"
+        ""
+        "AsyncParallelExecutorTest.cpp.in"
+        "Async"
+      )
+    endif()
   endif()
 endforeach()
