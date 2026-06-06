@@ -26,6 +26,7 @@ set_target_properties("AsyncThreadPoolExecutor" PROPERTIES
   PAR_EXEC_LANG "CXX"
   PAR_EXEC_HEADER "ParX/AsyncThreadPoolExecutor.hpp"
   PAR_EXEC_CTOR_PARAMS "CPU_THREADS"
+  PAR_EXEC_IS_ASYNC "YES"
 )
 add_custom_target("AsyncThreadPoolTemplateExecutor")
 set_target_properties("AsyncThreadPoolTemplateExecutor" PROPERTIES
@@ -33,6 +34,7 @@ set_target_properties("AsyncThreadPoolTemplateExecutor" PROPERTIES
   PAR_EXEC_LANG "CXX"
   PAR_EXEC_HEADER "ParX/AsyncThreadPoolExecutor.hpp"
   PAR_EXEC_T_PARAMS "CPU_THREADS"
+  PAR_EXEC_IS_ASYNC "YES"
 )
 add_custom_target("CudaExecutor")
 set_target_properties("CudaExecutor" PROPERTIES

@@ -1,0 +1,86 @@
+#include <gtest/gtest.h>
+
+#include <atomic>
+#include <cstddef>
+#include <thread>
+#include <vector>
+
+#include "ParX/ParallelExecutor.hpp"
+
+// clang-format off
+#include "${PAR_EXEC_HEADER}"
+
+class ${TEST_NAME} : public testing::Test {
+  // clang-format on
+ public:
+  // Kernel definitions must be public to allow use with CUDA.
+  using ElementType = int;
+
+  /* For each element in v, blocks until the element is even-valued, then
+   * increments it.
+   */
+  static void increment_even_kernel(std::size_t index, ElementType* v) {
+    auto aref = std::atomic_ref{v[index]};
+    while (true) {
+      auto value = ElementType{};
+      while ((value = aref.load(std::memory_order_relaxed)) % 2 != 0) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(1us);
+      }
+      if (aref.compare_exchange_weak(value, value + 1,
+                                     std::memory_order_relaxed)) {
+        return;
+      }
+    }
+  }
+
+  /* For each element in v, blocks until the element is odd-valued, then
+   * increments it.
+   */
+  static void increment_odd_kernel(std::size_t index, ElementType* v) {
+    auto aref = std::atomic_ref{v[index]};
+    while (true) {
+      auto value = ElementType{};
+      while ((value = aref.load(std::memory_order_relaxed)) % 2 == 0) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(1us);
+      }
+      if (aref.compare_exchange_weak(value, value + 1,
+                                     std::memory_order_relaxed)) {
+        return;
+      }
+    }
+  }
+
+ protected:
+  static constexpr auto large_prime =
+      1'000'003ul;  // This is the first prime number greater than 1,000,000.
+                    // The goal of using this number is to test large tasks that
+                    // can't be evenly divided among multiple threads.
+
+  // clang-format off
+  static_assert(ParX::AsyncParallelExecutor<${PAR_EXEC_TYPE}>);
+  ${PAR_EXEC_TYPE} even_exec{${CTOR_ARGS}};
+  ${PAR_EXEC_TYPE} odd_exec{${CTOR_ARGS}};
+};
+
+TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
+  // clang-format on
+  auto v = std::vector<ElementType>(large_prime, 0);
+  ParX::call_kernel<increment_odd_kernel>(odd_exec, large_prime, v.data());
+
+  // increment_odd_kernel() is blocked until increment_even_kernel() runs, but
+  // ParX::call_kernel() does not wait for it to complete.
+  for (auto const x : v) {
+    EXPECT_EQ(0, x);
+  }
+
+  ParX::call_kernel<increment_even_kernel>(even_exec, large_prime, v.data());
+  ParX::synchronize(odd_exec);
+  ParX::synchronize(even_exec);
+
+  // Both kernels have incremented the array elements.
+  for (auto const x : v) {
+    EXPECT_EQ(2, x);
+  }
+}
