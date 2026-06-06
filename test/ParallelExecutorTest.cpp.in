@@ -28,6 +28,15 @@ class ${TEST_NAME} : public testing::Test {
     return a[index] * b[index];
   }
 
+  static constexpr auto multiply_reduction(ElementType a, ElementType b) {
+    return a * b;
+  }
+
+  static constexpr auto identity_transform(std::size_t index,
+                                           ElementType const* a) {
+    return a[index];
+  }
+
  protected:
   static constexpr auto large_prime =
       1'000'003ul;  // This is the first prime number greater than 1,000,000.
@@ -97,6 +106,43 @@ class ${TEST_NAME} : public testing::Test {
     return n * (n + 1) * (2 * n + 1) / 6;
   }
 
+  static auto generate_multiply_reduction_vector(std::size_t n) {
+    // The test vector for the multiply reduction needs to be mostly 1s to
+    // prevent overflow.
+    auto v = std::vector(n, static_cast<ElementType>(1));
+    for (std::size_t i = 1; i < n; i = i * 2 + 1) {
+      v[i] = static_cast<ElementType>(2);
+    }
+    return v;
+  }
+
+  auto sequential_product(std::span<ElementType const> a) {
+#ifndef __CUDACC__
+    return ParX::transform_reduce<ElementType, multiply_reduction,
+                                  identity_transform>(
+        par_exec, static_cast<ElementType>(1), a.size(), a.data());
+#else
+    auto dev_a = static_cast<ElementType*>(nullptr);
+    cudaMalloc(&dev_a, a.size() * sizeof(ElementType));
+    cudaMemcpy(dev_a, a.data(), a.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice);
+    auto result = ParX::transform_reduce<ElementType, multiply_reduction,
+                                         identity_transform>(
+        par_exec, static_cast<ElementType>(1), a.size(), dev_a);
+    cudaFree(dev_a);
+    return result;
+#endif
+  }
+
+  static constexpr auto floor_power_of_2(std::size_t n) {
+    auto m = ElementType{};
+    do {
+      m = static_cast<ElementType>(n);
+      n = n & (n - 1);
+    } while (n != 0);  // Previous value of n was a power of 2 or 0.
+    return m;
+  }
+
   // clang-format off
   static_assert(ParX::ParallelExecutor<${PAR_EXEC_TYPE}>);
   ${PAR_EXEC_TYPE} par_exec{${CTOR_ARGS}};
@@ -132,5 +178,19 @@ TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
   auto const a = generate_reference_vector(large_prime);
   auto const result = scalar_product(a, a);
   EXPECT_EQ(sum_of_squares(large_prime), result);
+}
+
+TEST_F(${TEST_NAME}, SingleSequentialProductTest) {
+  // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
+  // should still produce the correct result.
+  auto const a = generate_multiply_reduction_vector(1);
+  auto const result = sequential_product(a);
+  EXPECT_EQ(floor_power_of_2(1), result);
+}
+
+TEST_F(${TEST_NAME}, LargePrimeSequentialProductTest) {
+  auto const a = generate_multiply_reduction_vector(large_prime);
+  auto const result = sequential_product(a);
+  EXPECT_EQ(floor_power_of_2(large_prime), result);
 }
 // clang-format on
