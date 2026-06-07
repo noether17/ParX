@@ -88,6 +88,7 @@ __global__ void cuda_transform_reduce_final(T* result, T const* block_results,
 
 template <std::size_t block_size>
 class CudaExecutor {
+  static_assert((block_size & 0x1Ful) == 0);  // Must be a multiple of 32.
   static constexpr auto max_blocks =
       std::numeric_limits<int>::max() / block_size;
   static constexpr auto n_blocks(std::size_t N) {
@@ -95,12 +96,22 @@ class CudaExecutor {
   }
 
  public:
+  CudaExecutor() {
+    CUDA_ERROR_CHECK(
+        cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
+  }
+  CudaExecutor(CudaExecutor const&) = delete;
+  CudaExecutor(CudaExecutor&&) = delete;
+  auto& operator=(CudaExecutor const&) = delete;
+  auto& operator=(CudaExecutor&&) = delete;
+  ~CudaExecutor() { CUDA_ERROR_CHECK(cudaStreamDestroy(stream_)); }
+
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
     requires Kernel<kernel, Args...>
   {
     cuda_call_kernel<kernel, Args...>
-        <<<n_blocks(n_items), block_size>>>(n_items, args...);
+        <<<n_blocks(n_items), block_size, 0, stream_>>>(n_items, args...);
     CUDA_ERROR_CHECK(cudaGetLastError());
   }
 
@@ -109,28 +120,43 @@ class CudaExecutor {
                         TransformArgs... transform_args)
     requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
   {
+    if (n_items == 0) {
+      return init_val;
+    }
     auto dev_result = (T*){nullptr};
-    CUDA_ERROR_CHECK(cudaMalloc(&dev_result, sizeof(T)));
+    CUDA_ERROR_CHECK(cudaMallocAsync(&dev_result, sizeof(T), stream_));
     auto dev_block_results = (T*){nullptr};
-    CUDA_ERROR_CHECK(
-        cudaMalloc(&dev_block_results, n_blocks(n_items) * sizeof(T)));
+    CUDA_ERROR_CHECK(cudaMallocAsync(&dev_block_results,
+                                     n_blocks(n_items) * sizeof(T), stream_));
 
     cuda_transform_reduce<block_size, T, reduce, transform>
-        <<<n_blocks(n_items), block_size>>>(dev_block_results, n_items,
-                                            transform_args...);
+        <<<n_blocks(n_items), block_size, 0, stream_>>>(
+            dev_block_results, n_items, transform_args...);
     CUDA_ERROR_CHECK(cudaGetLastError());
     cuda_transform_reduce_final<block_size, T, reduce>
-        <<<1, block_size>>>(dev_result, dev_block_results, n_blocks(n_items));
+        <<<1, block_size, 0, stream_>>>(dev_result, dev_block_results,
+                                        n_blocks(n_items));
     CUDA_ERROR_CHECK(cudaGetLastError());
 
-    auto result = T{};
-    CUDA_ERROR_CHECK(
-        cudaMemcpy(&result, dev_result, sizeof(T), cudaMemcpyDeviceToHost));
+    auto host_result_ptr = (T*){nullptr};
+    CUDA_ERROR_CHECK(cudaMallocHost(&host_result_ptr, sizeof(T)));
+    CUDA_ERROR_CHECK(cudaMemcpyAsync(host_result_ptr, dev_result, sizeof(T),
+                                     cudaMemcpyDeviceToHost, stream_));
+    synchronize();
+    auto result = *host_result_ptr;
+    CUDA_ERROR_CHECK(cudaFreeHost(host_result_ptr));
 
-    CUDA_ERROR_CHECK(cudaFree(dev_block_results));
-    CUDA_ERROR_CHECK(cudaFree(dev_result));
+    CUDA_ERROR_CHECK(cudaFreeAsync(dev_block_results, stream_));
+    CUDA_ERROR_CHECK(cudaFreeAsync(dev_result, stream_));
 
     return reduce(init_val, result);
   }
+
+  void synchronize() const { cudaStreamSynchronize(stream_); }
+
+  auto stream() const { return stream_; }
+
+ private:
+  cudaStream_t stream_{};
 };
 }  // namespace ParX
