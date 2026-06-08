@@ -55,25 +55,28 @@ class ${TEST_NAME} : public testing::Test {
 #ifndef __CUDACC__
     ParX::call_kernel<add_kernel>(par_exec, a.size(), a.data(), b.data(),
                                   c.data());
+    ParX::synchronize(par_exec);
 #else
     auto dev_a = static_cast<ElementType*>(nullptr);
     auto dev_b = static_cast<ElementType*>(nullptr);
     auto dev_c = static_cast<ElementType*>(nullptr);
-    cudaMalloc(&dev_a, a.size() * sizeof(ElementType));
-    cudaMalloc(&dev_b, b.size() * sizeof(ElementType));
-    cudaMalloc(&dev_c, c.size() * sizeof(ElementType));
-    cudaMemcpy(dev_a, a.data(), a.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b.data(), b.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice);
+    cudaMallocAsync(&dev_a, a.size() * sizeof(ElementType), memory_stream);
+    cudaMallocAsync(&dev_b, b.size() * sizeof(ElementType), memory_stream);
+    cudaMallocAsync(&dev_c, c.size() * sizeof(ElementType), memory_stream);
+    cudaMemcpyAsync(dev_a, a.data(), a.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice, memory_stream);
+    cudaMemcpyAsync(dev_b, b.data(), b.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice, memory_stream);
+    cudaStreamSynchronize(memory_stream);
     ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a, dev_b, dev_c);
-    cudaMemcpy(c.data(), dev_c, c.size() * sizeof(ElementType),
-               cudaMemcpyDeviceToHost);
-    cudaFree(dev_c);
-    cudaFree(dev_b);
-    cudaFree(dev_a);
+    ParX::synchronize(par_exec);
+    cudaMemcpyAsync(c.data(), dev_c, c.size() * sizeof(ElementType),
+               cudaMemcpyDeviceToHost, memory_stream);
+    cudaFreeAsync(dev_c, memory_stream);
+    cudaFreeAsync(dev_b, memory_stream);
+    cudaFreeAsync(dev_a, memory_stream);
+    cudaStreamSynchronize(memory_stream);
 #endif
-    synchronize(par_exec);
     return c;
   }
 
@@ -86,17 +89,18 @@ class ${TEST_NAME} : public testing::Test {
 #else
     auto dev_a = static_cast<ElementType*>(nullptr);
     auto dev_b = static_cast<ElementType*>(nullptr);
-    cudaMalloc(&dev_a, a.size() * sizeof(ElementType));
-    cudaMalloc(&dev_b, b.size() * sizeof(ElementType));
-    cudaMemcpy(dev_a, a.data(), a.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_b, b.data(), b.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice);
+    cudaMallocAsync(&dev_a, a.size() * sizeof(ElementType), memory_stream);
+    cudaMallocAsync(&dev_b, b.size() * sizeof(ElementType), memory_stream);
+    cudaMemcpyAsync(dev_a, a.data(), a.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice, memory_stream);
+    cudaMemcpyAsync(dev_b, b.data(), b.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice, memory_stream);
+    cudaStreamSynchronize(memory_stream);
     auto result =
         ParX::transform_reduce<ElementType, add_reduction, multiply_transform>(
             par_exec, ElementType{}, a.size(), dev_a, dev_b);
-    cudaFree(dev_b);
-    cudaFree(dev_a);
+    cudaFreeAsync(dev_b, memory_stream);
+    cudaFreeAsync(dev_a, memory_stream);
     return result;
 #endif
   }
@@ -123,13 +127,14 @@ class ${TEST_NAME} : public testing::Test {
         par_exec, static_cast<ElementType>(1), a.size(), a.data());
 #else
     auto dev_a = static_cast<ElementType*>(nullptr);
-    cudaMalloc(&dev_a, a.size() * sizeof(ElementType));
-    cudaMemcpy(dev_a, a.data(), a.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice);
+    cudaMallocAsync(&dev_a, a.size() * sizeof(ElementType), memory_stream);
+    cudaMemcpyAsync(dev_a, a.data(), a.size() * sizeof(ElementType),
+               cudaMemcpyHostToDevice, memory_stream);
+    cudaStreamSynchronize(memory_stream);
     auto result = ParX::transform_reduce<ElementType, multiply_reduction,
                                          identity_transform>(
         par_exec, static_cast<ElementType>(1), a.size(), dev_a);
-    cudaFree(dev_a);
+    cudaFreeAsync(dev_a, memory_stream);
     return result;
 #endif
   }
@@ -146,6 +151,16 @@ class ${TEST_NAME} : public testing::Test {
   // clang-format off
   static_assert(ParX::ParallelExecutor<${PAR_EXEC_TYPE}>);
   ${PAR_EXEC_TYPE} par_exec{${CTOR_ARGS}};
+
+#ifdef __CUDACC__
+  cudaStream_t memory_stream{};
+  ${TEST_NAME}() {
+    cudaStreamCreateWithFlags(&memory_stream, cudaStreamNonBlocking);
+  }
+  ~${TEST_NAME}() {
+    cudaStreamDestroy(memory_stream);
+  }
+#endif
 };
 
 TEST_F(${TEST_NAME}, SingleSumTest) {
