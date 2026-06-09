@@ -44,6 +44,18 @@ set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
   "AsyncThreadPoolExecutor"
 )
 
+add_custom_target("AsyncQueueThreadPoolExecutor")
+set_target_properties("AsyncQueueThreadPoolExecutor" PROPERTIES
+  PAR_EXEC_NAME "ParX::AsyncQueueThreadPoolExecutor"
+  PAR_EXEC_LANG "CXX"
+  PAR_EXEC_HEADER "ParX/AsyncQueueThreadPoolExecutor.hpp"
+  PAR_EXEC_CTOR_PARAMS "CPU_THREADS"
+  PAR_EXEC_IS_ASYNC "YES"
+)
+set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
+  "AsyncQueueThreadPoolExecutor"
+)
+
 add_custom_target("AsyncThreadPoolTemplateExecutor")
 set_target_properties("AsyncThreadPoolTemplateExecutor" PROPERTIES
   PAR_EXEC_NAME "ParX::AsyncThreadPoolTemplateExecutor"
