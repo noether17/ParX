@@ -1,6 +1,6 @@
 #pragma once
 
-#define LOGGING_ON
+// #define LOGGING_ON
 #ifdef LOGGING_ON
 
 #include <iostream>
