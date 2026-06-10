@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <functional>
 #include <latch>
-#include <numeric>
 #include <optional>
 #include <thread>
 #include <utility>

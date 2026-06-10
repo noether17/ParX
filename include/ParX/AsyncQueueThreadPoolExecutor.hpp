@@ -2,13 +2,10 @@
 
 #include <atomic>
 #include <barrier>
-#include <condition_variable>
 #include <cstddef>
 #include <functional>
 #include <iterator>
-#include <mutex>
 #include <optional>
-#include <shared_mutex>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -87,18 +84,22 @@ struct Popper {
 template <typename Predicate>
 bool busy_wait(std::stop_token stop_token, Predicate pred) {
   using namespace std::chrono_literals;
-  auto sleep_time = 1ns;
+  // auto sleep_time = 1ns;
   for (auto trial = 0; not stop_token.stop_requested(); ++trial) {
     if (pred()) {
       return true;
     }
-    if (trial == 16) {
+    if (trial == 8) {
       trial = 0;
-      std::this_thread::sleep_for(sleep_time);
-      if (sleep_time < 1024ns) {
-        sleep_time *= 2;
-      }
+      std::this_thread::yield();
     }
+    // if (trial == 16) {
+    //   trial = 0;
+    //   std::this_thread::sleep_for(sleep_time);
+    //   if (sleep_time < 1024ns) {
+    //     sleep_time *= 2;
+    //   }
+    // }
   }
   return false;
 }
