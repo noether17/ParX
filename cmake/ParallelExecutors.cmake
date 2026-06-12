@@ -56,6 +56,18 @@ set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
   "AsyncAtomicQueueThreadPoolExecutor"
 )
 
+add_custom_target("AsyncAtomicQueueThreadPoolExecutor2")
+set_target_properties("AsyncAtomicQueueThreadPoolExecutor2" PROPERTIES
+  PAR_EXEC_NAME "ParX::AsyncAtomicQueueThreadPoolExecutor2"
+  PAR_EXEC_LANG "CXX"
+  PAR_EXEC_HEADER "ParX/AsyncAtomicQueueThreadPoolExecutor2.hpp"
+  PAR_EXEC_CTOR_PARAMS "CPU_THREADS"
+  PAR_EXEC_IS_ASYNC "YES"
+)
+set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
+  "AsyncAtomicQueueThreadPoolExecutor2"
+)
+
 add_custom_target("CudaExecutor")
 set_target_properties("CudaExecutor" PROPERTIES
   PAR_EXEC_NAME "ParX::CudaExecutor"
