@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <new>
 #include <optional>
 #include <thread>
@@ -20,6 +21,8 @@ namespace ParX {
  * but only one consumer thread calling pop() (after all other consumers have
  * called front()) and one producer thread calling push().
  */
+inline constexpr auto cache_line_size =
+    std::hardware_destructive_interference_size;
 template <typename T, std::size_t buffer_size>
 class MultiReaderQ {
  public:
@@ -63,8 +66,6 @@ class MultiReaderQ {
   }
 
  private:
-  static constexpr auto cache_line_size =
-      std::hardware_destructive_interference_size;
   alignas(cache_line_size) std::array<T, buffer_size> buffer_{};
   alignas(cache_line_size) std::atomic<std::size_t> size_{};
   alignas(cache_line_size) std::size_t front_index_{};
@@ -78,9 +79,7 @@ struct Task {
 
 class TPE4 {
  public:
-  explicit TPE4(std::size_t n_threads)
-      : task_ready_flags_(n_threads),
-        n_running_threads_{static_cast<int>(n_threads)} {
+  explicit TPE4(std::size_t n_threads) {
     for (std::size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
       threads_.emplace_back([this, thread_id, n_threads] {
         SCOPED_LOG("thread ", thread_id);
@@ -88,20 +87,23 @@ class TPE4 {
         auto thread_begin_idx = std::size_t{};
         auto thread_end_idx = std::size_t{};
         auto task = decltype(task_queue_.front()){};
+        auto const thread_mask = 1ul << thread_id;
         while (true) {
           if (thread_id == 0) {
             n_running_threads_.store(n_threads, std::memory_order_relaxed);
             task = task_queue_.front();
-            for (auto& f : task_ready_flags_) {
-              f.test_and_set(std::memory_order_release);
-            }
-            for (auto& f : task_ready_flags_) {
-              f.notify_one();
-            }
+            task_ready_flags_.store(std::numeric_limits<std::size_t>::max(),
+                                    std::memory_order_release);
+            task_ready_flags_.notify_all();
           } else {
-            task_ready_flags_[thread_id].wait(false, std::memory_order_acquire);
+            auto flags = std::size_t{};
+            while (not(
+                (flags = task_ready_flags_.load(std::memory_order_acquire)) &
+                thread_mask)) {
+              task_ready_flags_.wait(flags, std::memory_order_relaxed);
+            }
             task = task_queue_.front();
-            task_ready_flags_[thread_id].clear();
+            task_ready_flags_.fetch_sub(thread_mask, std::memory_order_relaxed);
           }
 
           if (task.operation == nullptr) {
@@ -217,9 +219,9 @@ class TPE4 {
   constexpr auto n_threads() const { return std::ssize(threads_); }
 
  private:
-  MultiReaderQ<Task, 8> task_queue_{};
-  std::vector<std::atomic_flag> task_ready_flags_{};
-  std::atomic_int n_running_threads_{};
+  MultiReaderQ<Task, 16> task_queue_{};
+  alignas(cache_line_size) std::atomic<std::size_t> task_ready_flags_{};
+  alignas(cache_line_size) std::atomic_int n_running_threads_{};
   std::vector<std::jthread> threads_{};
 };
 
