@@ -79,7 +79,7 @@ struct Task {
 class TPE4 {
  public:
   explicit TPE4(std::size_t n_threads)
-      : front_task_used_(n_threads),
+      : task_ready_flags_(n_threads),
         n_running_threads_{static_cast<int>(n_threads)} {
     for (std::size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
       threads_.emplace_back([this, thread_id, n_threads] {
@@ -89,12 +89,21 @@ class TPE4 {
         auto thread_end_idx = std::size_t{};
         auto task = decltype(task_queue_.front()){};
         while (true) {
-          FUNCTION_LOG("thread ", thread_id,
-                       " waiting for old task to be popped.");
-          front_task_used_[thread_id].wait(true, std::memory_order_acquire);
-          FUNCTION_LOG("thread ", thread_id, " waiting for new front task.");
-          auto task = task_queue_.front();
-          front_task_used_[thread_id].test_and_set(std::memory_order_relaxed);
+          if (thread_id == 0) {
+            n_running_threads_.store(n_threads, std::memory_order_relaxed);
+            task = task_queue_.front();
+            for (auto& f : task_ready_flags_) {
+              f.test_and_set(std::memory_order_release);
+            }
+            for (auto& f : task_ready_flags_) {
+              f.notify_one();
+            }
+          } else {
+            task_ready_flags_[thread_id].wait(false, std::memory_order_acquire);
+            task = task_queue_.front();
+            task_ready_flags_[thread_id].clear();
+          }
+
           if (task.operation == nullptr) {
             FUNCTION_LOG("thread ", thread_id, " stopping work.");
             break;  // stop-work issued.
@@ -109,15 +118,19 @@ class TPE4 {
           }
           FUNCTION_LOG("thread ", thread_id, " executing task.");
           task.operation(thread_begin_idx, thread_end_idx);
-          if (n_running_threads_.fetch_sub(1, std::memory_order_acquire) == 1) {
-            FUNCTION_LOG("thread ", thread_id, " popping task.");
-            task_queue_.pop();
-            n_running_threads_.store(n_threads, std::memory_order_relaxed);
-            for (auto& f : front_task_used_) {
-              f.clear(std::memory_order_release);
+          auto remaining_threads =
+              n_running_threads_.fetch_sub(1, std::memory_order_release) - 1;
+
+          if (thread_id == 0) {
+            while ((remaining_threads = n_running_threads_.load(
+                        std::memory_order_acquire)) != 0) {
+              n_running_threads_.wait(remaining_threads,
+                                      std::memory_order_relaxed);
             }
-            for (auto& f : front_task_used_) {
-              f.notify_one();
+            task_queue_.pop();
+          } else {
+            if (remaining_threads == 0) {
+              n_running_threads_.notify_one();
             }
           }
         }
@@ -205,7 +218,7 @@ class TPE4 {
 
  private:
   MultiReaderQ<Task, 8> task_queue_{};
-  std::vector<std::atomic_flag> front_task_used_{};
+  std::vector<std::atomic_flag> task_ready_flags_{};
   std::atomic_int n_running_threads_{};
   std::vector<std::jthread> threads_{};
 };
