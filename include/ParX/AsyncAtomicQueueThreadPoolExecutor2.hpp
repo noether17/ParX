@@ -26,12 +26,26 @@ inline constexpr auto cache_line_size =
 template <typename T, std::size_t buffer_size>
 class MultiReaderQ {
  public:
-  /* Non-destructively reads the front element of the queue. Blocks if the queue
-   * is empty.
-   */
-  auto front() const {
-    size_.wait(0, std::memory_order_acquire);
-    return buffer_[front_index_ % buffer_size];
+  MultiReaderQ()
+      : buffer_{static_cast<T*>(std::malloc(buffer_size * sizeof(T)))} {}
+  ~MultiReaderQ() { std::free(buffer_); }
+
+  auto pop() {
+    auto element = std::move(buffer_[front_index_ % buffer_size]);
+    buffer_[front_index_ % buffer_size].~T();
+    ++front_index_;
+    size_.fetch_sub(1, std::memory_order_relaxed);
+    return element;
+  }
+
+  bool try_push(T const& t) {
+    if (size_.load(std::memory_order_relaxed) >= buffer_size) {
+      return false;
+    }
+    new (&buffer_[back_index_ % buffer_size]) T(t);
+    ++back_index_;
+    size_.fetch_add(1, std::memory_order_release);
+    return true;
   }
 
   /* Waits for the queue to become empty.
@@ -39,34 +53,13 @@ class MultiReaderQ {
   void await() const {
     auto current_size = std::size_t{};
     while ((current_size = size_.load(std::memory_order_relaxed)) != 0) {
-      size_.wait(current_size, std::memory_order_relaxed);
     }
   }
 
-  /* Pushes t to the queue. Blocks if queue is full.
-   */
-  void push(T t) {
-    size_.wait(buffer_size, std::memory_order_relaxed);
-
-    buffer_[back_index_++ % buffer_size] = std::move(t);
-    size_.fetch_add(1, std::memory_order_release);
-    size_.notify_all();
-  }
-
-  /* Removes the front element from the queue. Results in undefined behavior if
-   * called on an empty queue, or while other threads are accessing the front of
-   * the queue (through either front() or pop()). The intended use is for all
-   * consumer threads to call front() repeatedly until they get a value, then
-   * synchronize before a single thread calls pop().
-   */
-  void pop() {
-    ++front_index_;
-    size_.fetch_sub(1, std::memory_order_relaxed);
-    size_.notify_one();
-  }
+  bool empty() const { return size_.load(std::memory_order_acquire) == 0; }
 
  private:
-  alignas(cache_line_size) std::array<T, buffer_size> buffer_{};
+  T* const buffer_{};
   alignas(cache_line_size) std::atomic<std::size_t> size_{};
   alignas(cache_line_size) std::size_t front_index_{};
   alignas(cache_line_size) std::size_t back_index_{};
@@ -79,66 +72,53 @@ struct Task {
 
 class TPE4 {
  public:
-  explicit TPE4(std::size_t n_threads) {
+  explicit TPE4(std::size_t n_threads) : task_ready_flags_(n_threads) {
     for (std::size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
       threads_.emplace_back([this, thread_id, n_threads] {
         SCOPED_LOG("thread ", thread_id);
         auto cached_n_items = std::size_t{};
         auto thread_begin_idx = std::size_t{};
         auto thread_end_idx = std::size_t{};
-        auto task = decltype(task_queue_.front()){};
-        auto const thread_mask = 1ul << thread_id;
         while (true) {
           if (thread_id == 0) {
-            n_running_threads_.store(n_threads, std::memory_order_relaxed);
-            task = task_queue_.front();
-            task_ready_flags_.store(std::numeric_limits<std::size_t>::max(),
-                                    std::memory_order_release);
-            task_ready_flags_.notify_all();
-          } else {
-            auto flags = std::size_t{};
-            while (not(
-                (flags = task_ready_flags_.load(std::memory_order_acquire)) &
-                thread_mask)) {
-              task_ready_flags_.wait(flags, std::memory_order_relaxed);
+            // Wait for all worker threads to finish.
+            while (n_running_threads_.load(std::memory_order_acquire) != 0) {
             }
-            task = task_queue_.front();
-            task_ready_flags_.fetch_sub(thread_mask, std::memory_order_relaxed);
+
+            // Wait for next task.
+            while (task_queue_.empty()) {
+            }
+            n_running_threads_.store(n_threads);
+
+            // Publish active_task_.
+            active_task_ = task_queue_.pop();
+            for (auto& f : task_ready_flags_) {
+              f.test_and_set(std::memory_order_release);
+            }
+          } else {
+            // Wait for task ready flag.
+            while (not task_ready_flags_[thread_id].test(
+                std::memory_order_acquire)) {
+            }
+            task_ready_flags_[thread_id].clear();
           }
 
-          if (task.operation == nullptr) {
+          if (active_task_.operation == nullptr) {
             FUNCTION_LOG("thread ", thread_id, " stopping work.");
+            n_running_threads_.fetch_sub(1, std::memory_order_relaxed);
             break;  // stop-work issued.
           }
-          if (cached_n_items != task.n_items) {
-            cached_n_items = task.n_items;
+          if (cached_n_items != active_task_.n_items) {
+            cached_n_items = active_task_.n_items;
             auto const items_per_thread =
-                (task.n_items + n_threads - 1) / n_threads;
+                (active_task_.n_items + n_threads - 1) / n_threads;
             thread_begin_idx = thread_id * items_per_thread;
-            thread_end_idx =
-                std::min((thread_id + 1) * items_per_thread, task.n_items);
+            thread_end_idx = std::min((thread_id + 1) * items_per_thread,
+                                      active_task_.n_items);
           }
           FUNCTION_LOG("thread ", thread_id, " executing task.");
-          task.operation(thread_begin_idx, thread_end_idx);
-          auto remaining_threads =
-              n_running_threads_.fetch_sub(1, std::memory_order_release) - 1;
-
-          if (thread_id == 0) {
-            while ((remaining_threads = n_running_threads_.load(
-                        std::memory_order_acquire)) != 0) {
-              n_running_threads_.wait(remaining_threads,
-                                      std::memory_order_relaxed);
-            }
-            task_queue_.pop();
-          } else {
-            if (remaining_threads == 0) {
-              n_running_threads_.notify_one();
-            }
-          }
-        }
-        if (n_running_threads_.fetch_sub(1, std::memory_order_acquire) == 1) {
-          FUNCTION_LOG("thread ", thread_id, " popping task.");
-          task_queue_.pop();
+          active_task_.operation(thread_begin_idx, thread_end_idx);
+          n_running_threads_.fetch_sub(1, std::memory_order_release);
         }
       });
     }
@@ -146,12 +126,14 @@ class TPE4 {
 
   ~TPE4() {
     SCOPED_LOG();
-    task_queue_.push({});  // null task indicates stop-work.
+    while (not task_queue_.try_push({}));  // Null task indicates stop-work.
   }
 
   auto synchronize() const {
     SCOPED_LOG();
     task_queue_.await();
+    while (n_running_threads_.load(std::memory_order_acquire) != 0) {
+    }
   }
 
   template <auto kernel, typename... Args>
@@ -159,14 +141,16 @@ class TPE4 {
     requires Kernel<kernel, Args...>
   {
     SCOPED_LOG();
-    task_queue_.push({[... args = std::move(args)](std::size_t thread_begin_idx,
-                                                   std::size_t thread_end_idx) {
-                        for (auto i = thread_begin_idx; i < thread_end_idx;
-                             ++i) {
-                          kernel(i, args...);
-                        }
-                      },
-                      n_items});
+    auto task =
+        Task{[... args = std::move(args)](std::size_t thread_begin_idx,
+                                          std::size_t thread_end_idx) {
+               for (auto i = thread_begin_idx; i < thread_end_idx; ++i) {
+                 kernel(i, args...);
+               }
+             },
+             n_items};
+    while (not task_queue_.try_push(task)) {
+    }
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
@@ -219,9 +203,10 @@ class TPE4 {
   constexpr auto n_threads() const { return std::ssize(threads_); }
 
  private:
-  MultiReaderQ<Task, 16> task_queue_{};
-  alignas(cache_line_size) std::atomic<std::size_t> task_ready_flags_{};
+  alignas(cache_line_size) MultiReaderQ<Task, 16> task_queue_{};
+  alignas(cache_line_size) Task active_task_{};
   alignas(cache_line_size) std::atomic_int n_running_threads_{};
+  alignas(cache_line_size) std::vector<std::atomic_flag> task_ready_flags_{};
   std::vector<std::jthread> threads_{};
 };
 
