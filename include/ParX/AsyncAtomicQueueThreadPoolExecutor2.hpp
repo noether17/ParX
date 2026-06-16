@@ -206,7 +206,8 @@ class TPE4 {
   alignas(cache_line_size) MultiReaderQ<Task, 16> task_queue_{};
   alignas(cache_line_size) Task active_task_{};
   alignas(cache_line_size) std::atomic_int n_running_threads_{};
-  alignas(cache_line_size) std::vector<std::atomic_flag> task_ready_flags_{};
+  struct alignas(cache_line_size) Flag : std::atomic_flag{};
+  alignas(cache_line_size) std::vector<Flag> task_ready_flags_{};
   std::vector<std::jthread> threads_{};
 };
 
