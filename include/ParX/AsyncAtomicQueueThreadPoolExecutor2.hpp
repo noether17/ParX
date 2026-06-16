@@ -70,6 +70,20 @@ struct Task {
   std::size_t n_items{};
 };
 
+template <typename Atomic, typename Predicate>
+void busy_wait(Atomic const& a_value, Predicate&& pred) {
+  while (not pred(a_value.load(std::memory_order_acquire))) {
+    for (auto trial = 0; not pred(a_value.load(std::memory_order_relaxed));
+         ++trial) {
+      __builtin_ia32_pause();
+      if (trial == 16) {
+        trial = 0;
+        std::this_thread::yield();
+      }
+    }
+  }
+}
+
 class TPE4 {
  public:
   explicit TPE4(std::size_t n_threads) : task_ready_flags_(n_threads) {
@@ -93,23 +107,26 @@ class TPE4 {
             // Publish active_task_.
             active_task_ = task_queue_.pop();
             for (auto& f : task_ready_flags_) {
-              f.test_and_set(std::memory_order_release);
+              f.store(true, std::memory_order_release);
             }
           } else {
             // Wait for task ready flag.
-            while (not task_ready_flags_[thread_id].test(
-                std::memory_order_acquire)) {
-              for (auto trial = 0; not task_ready_flags_[thread_id].test(
-                       std::memory_order_relaxed);
-                   ++trial) {
-                  __builtin_ia32_pause();
-                if (trial == 16) {
-                  trial = 0;
-                  std::this_thread::yield();
-                }
-              }
-            }
-            task_ready_flags_[thread_id].clear();
+            // while (not task_ready_flags_[thread_id].load(
+            //    std::memory_order_acquire)) {
+            //  for (auto trial = 0; not task_ready_flags_[thread_id].load(
+            //           std::memory_order_relaxed);
+            //       ++trial) {
+            //    __builtin_ia32_pause();
+            //    if (trial == 16) {
+            //      trial = 0;
+            //      std::this_thread::yield();
+            //    }
+            //  }
+            //}
+            busy_wait(task_ready_flags_[thread_id],
+                      [](auto flag) { return flag; });
+            task_ready_flags_[thread_id].store(false,
+                                               std::memory_order_relaxed);
           }
 
           if (active_task_.operation == nullptr) {
@@ -215,7 +232,7 @@ class TPE4 {
   alignas(cache_line_size) MultiReaderQ<Task, 16> task_queue_{};
   alignas(cache_line_size) Task active_task_{};
   alignas(cache_line_size) std::atomic_int n_running_threads_{};
-  struct alignas(cache_line_size) Flag : std::atomic_flag {};
+  struct alignas(cache_line_size) Flag : std::atomic_bool {};
   alignas(cache_line_size) std::vector<Flag> task_ready_flags_{};
   std::vector<std::jthread> threads_{};
 };
