@@ -70,8 +70,8 @@ struct Task {
   std::size_t n_items{};
 };
 
-template <typename Atomic, typename Predicate>
-void busy_wait(Atomic const& a_value, Predicate&& pred) {
+template <typename T, typename Predicate>
+void busy_wait(std::atomic<T> const& a_value, Predicate&& pred) {
   while (not pred(a_value.load(std::memory_order_acquire))) {
     for (auto trial = 0; not pred(a_value.load(std::memory_order_relaxed));
          ++trial) {
@@ -111,18 +111,6 @@ class TPE4 {
             }
           } else {
             // Wait for task ready flag.
-            // while (not task_ready_flags_[thread_id].load(
-            //    std::memory_order_acquire)) {
-            //  for (auto trial = 0; not task_ready_flags_[thread_id].load(
-            //           std::memory_order_relaxed);
-            //       ++trial) {
-            //    __builtin_ia32_pause();
-            //    if (trial == 16) {
-            //      trial = 0;
-            //      std::this_thread::yield();
-            //    }
-            //  }
-            //}
             busy_wait(task_ready_flags_[thread_id],
                       [](auto flag) { return flag; });
             task_ready_flags_[thread_id].store(false,
