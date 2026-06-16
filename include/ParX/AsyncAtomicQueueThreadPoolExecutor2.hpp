@@ -99,6 +99,15 @@ class TPE4 {
             // Wait for task ready flag.
             while (not task_ready_flags_[thread_id].test(
                 std::memory_order_acquire)) {
+              for (auto trial = 0; not task_ready_flags_[thread_id].test(
+                       std::memory_order_relaxed);
+                   ++trial) {
+                  __builtin_ia32_pause();
+                if (trial == 16) {
+                  trial = 0;
+                  std::this_thread::yield();
+                }
+              }
             }
             task_ready_flags_[thread_id].clear();
           }
@@ -206,7 +215,7 @@ class TPE4 {
   alignas(cache_line_size) MultiReaderQ<Task, 16> task_queue_{};
   alignas(cache_line_size) Task active_task_{};
   alignas(cache_line_size) std::atomic_int n_running_threads_{};
-  struct alignas(cache_line_size) Flag : std::atomic_flag{};
+  struct alignas(cache_line_size) Flag : std::atomic_flag {};
   alignas(cache_line_size) std::vector<Flag> task_ready_flags_{};
   std::vector<std::jthread> threads_{};
 };
