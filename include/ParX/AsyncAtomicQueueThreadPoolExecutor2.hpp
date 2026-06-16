@@ -70,18 +70,27 @@ struct Task {
   std::size_t n_items{};
 };
 
-template <typename T, typename Predicate>
-void busy_wait(std::atomic<T> const& a_value, Predicate&& pred) {
-  while (not pred(a_value.load(std::memory_order_acquire))) {
-    for (auto trial = 0; not pred(a_value.load(std::memory_order_relaxed));
-         ++trial) {
-      __builtin_ia32_pause();
-      if (trial == 16) {
-        trial = 0;
-        std::this_thread::yield();
-      }
+template <typename Testable, typename Predicate>
+void busy_wait(Testable&& t, Predicate&& pred) {
+  for (auto trial = 0; not pred(t); ++trial) {
+    __builtin_ia32_pause();
+    if (trial == 16) {
+      trial = 0;
+      std::this_thread::yield();
     }
   }
+}
+
+template <typename Testable, typename Predicate>
+void busy_wait(Testable&& t, Predicate&& pred)
+  requires requires(Testable t_, std::memory_order order) { t_.load(order); }
+{
+  // Performs busy_wait() using relaxed memory order before final check using
+  // acquire memory order.
+  do {
+    busy_wait([&] { return t.load(std::memory_order_relaxed); },
+              [&](auto&& t_lambda) { return pred(t_lambda()); });
+  } while (not pred(t.load(std::memory_order_acquire)));
 }
 
 class TPE4 {
