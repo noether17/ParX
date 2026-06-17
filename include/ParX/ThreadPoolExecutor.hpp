@@ -14,34 +14,34 @@
 #include "ParX/util/Logging.hpp"
 
 namespace ParX {
-inline constexpr auto cache_line_size =
-    std::hardware_destructive_interference_size;
-
-/* Waits for pred(t) to return true by repeatedly checking the return value.
- * Pauses after each check and periodically yields the thread to avoid excessive
- * consumption of the CPU.
+/* Waits for predicate(testable) to return true by repeatedly checking the
+ * return value. Spins num_spins times, pausing on each spin, before yielding
+ * the thread.
  */
-template <typename Testable, typename Predicate>
-void busy_wait(Testable&& t, Predicate&& pred) {
-  for (auto trial = 0; not pred(t); ++trial) {
+template <int num_spins = 16>
+void busy_wait(auto&& testable, auto&& predicate) {
+  for (auto spin_count = 0; not predicate(testable); ++spin_count) {
     __builtin_ia32_pause();
-    if (trial == 16) {
-      trial = 0;
+    if (spin_count == num_spins - 1) {
+      spin_count = 0;
       std::this_thread::yield();
     }
   }
 }
 
-/* Checks predicate on atomic value using acquire memory order. If the predicate
- * is false, busy waits for true using relaxed memory order before final check
- * using acquire memory order. */
-template <typename Testable, typename Predicate>
-void busy_wait(Testable&& t, Predicate&& pred)
-  requires requires(Testable t_, std::memory_order order) { t_.load(order); }
+/* Checks predicate on atomic_value using acquire memory order. If the predicate
+ * returns false, busy waits until it returns true using relaxed memory order
+ * before the final check using acquire memory order. */
+template <int num_spins = 16>
+void busy_wait(auto&& atomic_value, auto&& predicate)
+  requires requires(decltype(atomic_value) v, std::memory_order order) {
+    v.load(order);
+  }
 {
-  while (not pred(t.load(std::memory_order_acquire))) {
-    busy_wait([&] { return t.load(std::memory_order_relaxed); },
-              [&](auto&& t_loader) { return pred(t_loader()); });
+  while (not predicate(atomic_value.load(std::memory_order_acquire))) {
+    busy_wait<num_spins>(
+        [&] { return atomic_value.load(std::memory_order_relaxed); },
+        [&](auto&& t_loader) { return predicate(t_loader()); });
   }
 }
 
@@ -84,9 +84,12 @@ class LockFreeQueue {
 
  private:
   T* const buffer_{};
-  alignas(cache_line_size) std::atomic<std::size_t> size_{};
-  alignas(cache_line_size) std::size_t front_index_{};
-  alignas(cache_line_size) std::size_t back_index_{};
+  alignas(std::hardware_destructive_interference_size)
+      std::atomic<std::size_t> size_{};
+  alignas(std::hardware_destructive_interference_size) std::size_t
+      front_index_{};
+  alignas(std::hardware_destructive_interference_size) std::size_t
+      back_index_{};
 };
 
 struct Task {
@@ -173,7 +176,8 @@ class ThreadPoolExecutor {
                }
              },
              n_items};
-    busy_wait(task_queue_, [&](auto& q) { return q.try_push(task); });
+    busy_wait(task_queue_,
+                         [&](auto& q) { return q.try_push(task); });
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
@@ -226,11 +230,15 @@ class ThreadPoolExecutor {
   constexpr auto n_threads() const { return std::ssize(threads_); }
 
  private:
-  alignas(cache_line_size) LockFreeQueue<Task, queue_size> task_queue_{};
-  alignas(cache_line_size) Task active_task_{};
-  alignas(cache_line_size) std::atomic_int n_running_threads_{};
-  struct alignas(cache_line_size) Flag : std::atomic_bool {};
-  alignas(cache_line_size) std::vector<Flag> task_ready_flags_{};
+  alignas(std::hardware_destructive_interference_size)
+      LockFreeQueue<Task, queue_size> task_queue_{};
+  alignas(std::hardware_destructive_interference_size) Task active_task_{};
+  alignas(std::hardware_destructive_interference_size) std::atomic_int
+      n_running_threads_{};
+  struct alignas(std::hardware_destructive_interference_size) Flag
+      : std::atomic_bool {};
+  alignas(std::hardware_destructive_interference_size)
+      std::vector<Flag> task_ready_flags_{};
   std::vector<std::jthread> threads_{};
 };
 
