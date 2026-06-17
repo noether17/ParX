@@ -172,8 +172,7 @@ class TPE4 {
                }
              },
              n_items};
-    while (not task_queue_.try_push(task)) {
-    }
+    busy_wait(task_queue_, [&](auto& q) { return q.try_push(task); });
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
