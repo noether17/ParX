@@ -16,13 +16,37 @@
 #include "ParX/util/Logging.hpp"
 
 namespace ParX {
+inline constexpr auto cache_line_size =
+    std::hardware_destructive_interference_size;
+
+template <typename Testable, typename Predicate>
+void busy_wait(Testable&& t, Predicate&& pred) {
+  for (auto trial = 0; not pred(t); ++trial) {
+    __builtin_ia32_pause();
+    if (trial == 16) {
+      trial = 0;
+      std::this_thread::yield();
+    }
+  }
+}
+
+template <typename Testable, typename Predicate>
+void busy_wait(Testable&& t, Predicate&& pred)
+  requires requires(Testable t_, std::memory_order order) { t_.load(order); }
+{
+  // Performs busy_wait() using relaxed memory order before final check using
+  // acquire memory order.
+  do {
+    busy_wait([&] { return t.load(std::memory_order_relaxed); },
+              [&](auto&& t_lambda) { return pred(t_lambda()); });
+  } while (not pred(t.load(std::memory_order_acquire)));
+}
+
 /* This class template provides a lock-free queue. It assumes that there are
  * several consumer threads non-destructively reading the front of the queue,
  * but only one consumer thread calling pop() (after all other consumers have
  * called front()) and one producer thread calling push().
  */
-inline constexpr auto cache_line_size =
-    std::hardware_destructive_interference_size;
 template <typename T, std::size_t buffer_size>
 class MultiReaderQ {
  public:
@@ -51,9 +75,7 @@ class MultiReaderQ {
   /* Waits for the queue to become empty.
    */
   void await() const {
-    auto current_size = std::size_t{};
-    while ((current_size = size_.load(std::memory_order_relaxed)) != 0) {
-    }
+    busy_wait(size_, [](auto n) { return n == 0; });
   }
 
   bool empty() const { return size_.load(std::memory_order_acquire) == 0; }
@@ -70,29 +92,6 @@ struct Task {
   std::size_t n_items{};
 };
 
-template <typename Testable, typename Predicate>
-void busy_wait(Testable&& t, Predicate&& pred) {
-  for (auto trial = 0; not pred(t); ++trial) {
-    __builtin_ia32_pause();
-    if (trial == 16) {
-      trial = 0;
-      std::this_thread::yield();
-    }
-  }
-}
-
-template <typename Testable, typename Predicate>
-void busy_wait(Testable&& t, Predicate&& pred)
-  requires requires(Testable t_, std::memory_order order) { t_.load(order); }
-{
-  // Performs busy_wait() using relaxed memory order before final check using
-  // acquire memory order.
-  do {
-    busy_wait([&] { return t.load(std::memory_order_relaxed); },
-              [&](auto&& t_lambda) { return pred(t_lambda()); });
-  } while (not pred(t.load(std::memory_order_acquire)));
-}
-
 class TPE4 {
  public:
   explicit TPE4(std::size_t n_threads) : task_ready_flags_(n_threads) {
@@ -105,12 +104,10 @@ class TPE4 {
         while (true) {
           if (thread_id == 0) {
             // Wait for all worker threads to finish.
-            while (n_running_threads_.load(std::memory_order_acquire) != 0) {
-            }
+            busy_wait(n_running_threads_, [](auto n) { return n == 0; });
 
             // Wait for next task.
-            while (task_queue_.empty()) {
-            }
+            busy_wait(task_queue_, [](auto const& q) { return not q.empty(); });
             n_running_threads_.store(n_threads);
 
             // Publish active_task_.
@@ -149,14 +146,15 @@ class TPE4 {
 
   ~TPE4() {
     SCOPED_LOG();
-    while (not task_queue_.try_push({}));  // Null task indicates stop-work.
+    busy_wait(task_queue_, [](auto& q) {
+      return q.try_push({});
+    });  // Null task indicates stop-work.
   }
 
   auto synchronize() const {
     SCOPED_LOG();
     task_queue_.await();
-    while (n_running_threads_.load(std::memory_order_acquire) != 0) {
-    }
+    busy_wait(n_running_threads_, [](auto n) { return n == 0; });
   }
 
   template <auto kernel, typename... Args>
