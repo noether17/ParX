@@ -19,7 +19,7 @@ namespace ParX {
  * the thread.
  */
 template <int num_spins = 16>
-void busy_wait(auto&& testable, auto&& predicate) {
+void busy_wait_until(auto&& testable, auto&& predicate) {
   for (auto spin_count = 0; not predicate(testable); ++spin_count) {
     __builtin_ia32_pause();
     if (spin_count == num_spins - 1) {
@@ -33,13 +33,13 @@ void busy_wait(auto&& testable, auto&& predicate) {
  * returns false, busy waits until it returns true using relaxed memory order
  * before the final check using acquire memory order. */
 template <int num_spins = 16>
-void busy_wait(auto&& atomic_value, auto&& predicate)
+void busy_wait_until(auto&& atomic_value, auto&& predicate)
   requires requires(decltype(atomic_value) v, std::memory_order order) {
     v.load(order);
   }
 {
   while (not predicate(atomic_value.load(std::memory_order_acquire))) {
-    busy_wait<num_spins>(
+    busy_wait_until<num_spins>(
         [&] { return atomic_value.load(std::memory_order_relaxed); },
         [&](auto&& t_loader) { return predicate(t_loader()); });
   }
@@ -71,15 +71,15 @@ class LockFreeQueue {
   }
 
   void wait_until_empty() const {
-    busy_wait(size_, [](auto n) { return n == 0; });
+    busy_wait_until(size_, [](auto n) { return n == 0; });
   }
 
   void wait_while_empty() const {
-    busy_wait(size_, [](auto n) { return n != 0; });
+    busy_wait_until(size_, [](auto n) { return n != 0; });
   }
 
   void wait_while_full() const {
-    busy_wait(size_, [](auto n) { return n < buffer_size; });
+    busy_wait_until(size_, [](auto n) { return n < buffer_size; });
   }
 
  private:
@@ -110,7 +110,7 @@ class ThreadPoolExecutor {
         auto thread_end_idx = std::size_t{};
         while (true) {
           if (thread_id == 0) {
-            busy_wait(n_running_threads_, [](auto n) { return n == 0; });
+            busy_wait_until(n_running_threads_, [](auto n) { return n == 0; });
             task_queue_.wait_while_empty();
             n_running_threads_.store(n_threads);
             active_task_ = task_queue_.pop();
@@ -118,8 +118,8 @@ class ThreadPoolExecutor {
               f.store(true, std::memory_order_release);
             }
           } else {
-            busy_wait(task_ready_flags_[thread_id],
-                      [](auto flag) { return flag; });
+            busy_wait_until(task_ready_flags_[thread_id],
+                            [](auto flag) { return flag; });
             task_ready_flags_[thread_id].store(false,
                                                std::memory_order_relaxed);
           }
@@ -159,7 +159,7 @@ class ThreadPoolExecutor {
   auto synchronize() const {
     SCOPED_LOG();
     task_queue_.wait_until_empty();
-    busy_wait(n_running_threads_, [](auto n) { return n == 0; });
+    busy_wait_until(n_running_threads_, [](auto n) { return n == 0; });
   }
 
   template <auto kernel, typename... Args>
@@ -169,12 +169,13 @@ class ThreadPoolExecutor {
     SCOPED_LOG();
     task_queue_.wait_while_full();
     task_queue_.push({[... args = std::move(args)](std::size_t thread_begin_idx,
-                                          std::size_t thread_end_idx) {
-               for (auto i = thread_begin_idx; i < thread_end_idx; ++i) {
-                 kernel(i, args...);
-               }
-             },
-             n_items});
+                                                   std::size_t thread_end_idx) {
+                        for (auto i = thread_begin_idx; i < thread_end_idx;
+                             ++i) {
+                          kernel(i, args...);
+                        }
+                      },
+                      n_items});
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
