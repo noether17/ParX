@@ -50,15 +50,13 @@ template <typename T, std::size_t buffer_size>
 class LockFreeQueue {
  public:
   auto pop() {
-    auto element = std::move(buffer_[front_index_ % buffer_size]);
-    ++front_index_;
+    auto element = std::move(buffer_[front_index_++ % buffer_size]);
     size_.fetch_sub(1, std::memory_order_relaxed);
     return element;
   }
 
   void push(T t) {
-    buffer_[back_index_ % buffer_size] = std::move(t);
-    ++back_index_;
+    buffer_[back_index_++ % buffer_size] = std::move(t);
     size_.fetch_add(1, std::memory_order_release);
   }
 
