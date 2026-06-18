@@ -64,8 +64,8 @@ class LockFreeQueue {
     return element;
   }
 
-  void push(T const& t) {
-    new (&buffer_[back_index_ % buffer_size]) T(t);
+  void push(T t) {
+    new (&buffer_[back_index_ % buffer_size]) T(std::move(t));
     ++back_index_;
     size_.fetch_add(1, std::memory_order_release);
   }
@@ -167,16 +167,14 @@ class ThreadPoolExecutor {
     requires Kernel<kernel, Args...>
   {
     SCOPED_LOG();
-    auto task =
-        Task{[... args = std::move(args)](std::size_t thread_begin_idx,
+    task_queue_.wait_while_full();
+    task_queue_.push({[... args = std::move(args)](std::size_t thread_begin_idx,
                                           std::size_t thread_end_idx) {
                for (auto i = thread_begin_idx; i < thread_end_idx; ++i) {
                  kernel(i, args...);
                }
              },
-             n_items};
-    task_queue_.wait_while_full();
-    task_queue_.push(task);
+             n_items});
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
