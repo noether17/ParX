@@ -1,85 +1,173 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <functional>
-#include <latch>
-#include <numeric>
+#include <iterator>
+#include <new>
 #include <optional>
 #include <thread>
 #include <utility>
 #include <vector>
 
 #include "ParX/ParallelExecutor.hpp"
+#include "ParX/util/Logging.hpp"
 
 namespace ParX {
-template <typename Predicate>
-bool busy_waiter(std::stop_token& stop_token, Predicate pred) {
-  for (auto trial = 0; not stop_token.stop_requested(); ++trial) {
-    if (pred()) {
-      return true;
-    }
-    if (trial == 8) {
-      trial = 0;
+namespace detail {
+/* Waits for predicate(testable) to return true by repeatedly checking the
+ * return value. Spins num_spins times, pausing on each spin, before yielding
+ * the thread.
+ */
+template <int num_spins = 16>
+void busy_wait_until(auto&& testable, auto&& predicate) {
+  for (auto spin_count = 0; not predicate(testable); ++spin_count) {
+    __builtin_ia32_pause();
+    if (spin_count == num_spins - 1) {
+      spin_count = 0;
       std::this_thread::yield();
     }
   }
-  return false;
 }
 
+/* Checks predicate on atomic_value using acquire memory order. If the predicate
+ * returns false, busy waits until it returns true using relaxed memory order
+ * before the final check using acquire memory order. */
+template <int num_spins = 16>
+void busy_wait_until(auto&& atomic_value, auto&& predicate)
+  requires requires(decltype(atomic_value) v, std::memory_order order) {
+    v.load(order);
+  }
+{
+  while (not predicate(atomic_value.load(std::memory_order_acquire))) {
+    busy_wait_until<num_spins>(
+        [&] { return atomic_value.load(std::memory_order_relaxed); },
+        [&](auto&& t_loader) { return predicate(t_loader()); });
+  }
+}
+
+template <typename T, std::size_t buffer_size>
+class LockFreeQueue {
+ public:
+  auto pop() {
+    auto element = std::move(buffer_[front_index_++ % buffer_size]);
+    size_.fetch_sub(1, std::memory_order_relaxed);
+    return element;
+  }
+
+  void push(T t) {
+    buffer_[back_index_++ % buffer_size] = std::move(t);
+    size_.fetch_add(1, std::memory_order_release);
+  }
+
+  void wait_until_empty() const {
+    busy_wait_until(size_, [](auto n) { return n == 0; });
+  }
+
+  void wait_while_empty() const {
+    busy_wait_until(size_, [](auto n) { return n != 0; });
+  }
+
+  void wait_while_full() const {
+    busy_wait_until(size_, [](auto n) { return n < buffer_size; });
+  }
+
+ private:
+  std::array<T, buffer_size> buffer_{};
+  alignas(std::hardware_destructive_interference_size)
+      std::atomic<std::size_t> size_{};
+  alignas(std::hardware_destructive_interference_size) std::size_t
+      front_index_{};
+  alignas(std::hardware_destructive_interference_size) std::size_t
+      back_index_{};
+};
+
+struct Task {
+  std::function<void(std::size_t, std::size_t)> operation{};
+  std::size_t n_items{};
+};
+}  // namespace detail
+
+template <std::size_t queue_size = 16>
 class ThreadPoolExecutor {
  public:
   explicit ThreadPoolExecutor(std::size_t n_threads)
-      : m_task_ready_flags(n_threads) {
+      : task_ready_flags_(n_threads) {
     for (std::size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
-      m_threads.emplace_back(
-          [this, thread_id, n_threads](std::stop_token stop_token) {
-            auto old_n_items = std::size_t{};
-            auto thread_begin = std::size_t{};
-            auto thread_end = std::size_t{};
-            while (true) {
-              if (not busy_waiter(stop_token, [this, thread_id] {
-                    return m_task_ready_flags[thread_id].load();
-                  })) {
-                return;
-              }
-              m_task_ready_flags[thread_id] = false;
-
-              if (auto current_n_items = m_n_items.load();
-                  current_n_items != old_n_items) {
-                old_n_items = current_n_items;
-                auto items_per_thread =
-                    (current_n_items + n_threads - 1) / n_threads;
-                thread_begin = thread_id * items_per_thread;
-                thread_end = std::min((thread_id + 1) * items_per_thread,
-                                      current_n_items);
-              }
-
-              m_task(thread_begin, thread_end);
+      threads_.emplace_back([this, thread_id, n_threads] {
+        SCOPED_LOG("thread ", thread_id);
+        auto cached_n_items = std::size_t{};
+        auto thread_begin_idx = std::size_t{};
+        auto thread_end_idx = std::size_t{};
+        while (true) {
+          if (thread_id == 0) {
+            detail::busy_wait_until(n_running_threads_,
+                                    [](auto n) { return n == 0; });
+            task_queue_.wait_while_empty();
+            n_running_threads_.store(n_threads);
+            active_task_ = task_queue_.pop();
+            for (auto& f : task_ready_flags_) {
+              f.store(true, std::memory_order_release);
             }
-          },
-          std::stop_token{m_stop_source.get_token()});
+          } else {
+            detail::busy_wait_until(task_ready_flags_[thread_id],
+                                    [](auto flag) { return flag; });
+            task_ready_flags_[thread_id].store(false,
+                                               std::memory_order_relaxed);
+          }
+
+          if (active_task_.operation == nullptr) {
+            FUNCTION_LOG("thread ", thread_id, " stopping work.");
+            n_running_threads_.fetch_sub(1, std::memory_order_relaxed);
+            break;  // stop-work issued.
+          }
+          if (cached_n_items != active_task_.n_items) {
+            cached_n_items = active_task_.n_items;
+            auto const items_per_thread =
+                (active_task_.n_items + n_threads - 1) / n_threads;
+            thread_begin_idx = thread_id * items_per_thread;
+            thread_end_idx = std::min((thread_id + 1) * items_per_thread,
+                                      active_task_.n_items);
+          }
+          FUNCTION_LOG("thread ", thread_id, " executing task.");
+          active_task_.operation(thread_begin_idx, thread_end_idx);
+          n_running_threads_.fetch_sub(1, std::memory_order_release);
+        }
+      });
     }
   }
 
-  ~ThreadPoolExecutor() { m_stop_source.request_stop(); }
+  ThreadPoolExecutor(ThreadPoolExecutor const&) = delete;
+  ThreadPoolExecutor(ThreadPoolExecutor&&) = delete;
+  auto& operator=(ThreadPoolExecutor const&) = delete;
+  auto& operator=(ThreadPoolExecutor&&) = delete;
+
+  ~ThreadPoolExecutor() {
+    SCOPED_LOG();
+    task_queue_.wait_while_full();
+    task_queue_.push({});  // Null task indicates stop-work.
+  }
+
+  auto synchronize() const {
+    SCOPED_LOG();
+    task_queue_.wait_until_empty();
+    detail::busy_wait_until(n_running_threads_, [](auto n) { return n == 0; });
+  }
 
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
     requires Kernel<kernel, Args...>
   {
-    auto latch = std::latch{std::ssize(m_threads)};
-    m_n_items = n_items;
-    m_task = [&latch, ... args = std::move(args)](std::size_t thread_begin,
-                                                  std::size_t thread_end) {
-      for (auto i = thread_begin; i < thread_end; ++i) {
-        kernel(i, args...);
-      }
-      latch.count_down();
-    };
-    for (auto& flag : m_task_ready_flags) {
-      flag = true;
-    }
-    latch.wait();
+    SCOPED_LOG();
+    task_queue_.wait_while_full();
+    task_queue_.push({[... args = std::move(args)](std::size_t thread_begin_idx,
+                                                   std::size_t thread_end_idx) {
+                        for (auto i = thread_begin_idx; i < thread_end_idx;
+                             ++i) {
+                          kernel(i, args...);
+                        }
+                      },
+                      n_items});
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
@@ -106,13 +194,19 @@ class ThreadPoolExecutor {
                         TransformArgs... transform_args)
     requires(Reduction<reduce, T> and Transform<transform, T, TransformArgs...>)
   {
-    auto const n_threads = std::ssize(m_threads);
-    auto thread_partial_results = std::vector<std::optional<T>>(n_threads);
+    SCOPED_LOG();
+    auto const n_threads = std::ssize(threads_);
+    auto thread_partial_results = std::vector<std::optional<T>>(
+        n_threads);  // TODO: Remove this allocation (likely need
+                     // n_threads to be a template parameter so
+                     // std::array can be used instead).
     auto n_items_per_thread = (n_items + n_threads - 1) / n_threads;
     call_kernel<
         transform_reduce_kernel<T, reduce, transform, TransformArgs...>>(
         n_threads, thread_partial_results.data(), n_items, n_items_per_thread,
         transform_args...);
+    synchronize();
+    FUNCTION_LOG("synchronized threads.");
     auto result = init_val;
     for (auto partial_result_iter = thread_partial_results.begin();
          partial_result_iter != thread_partial_results.end() and
@@ -123,19 +217,24 @@ class ThreadPoolExecutor {
     return result;
   }
 
-  constexpr auto n_threads() const { return std::ssize(m_threads); }
+  constexpr auto n_threads() const { return std::ssize(threads_); }
 
  private:
-  std::stop_source m_stop_source{};
-  std::function<void(std::size_t, std::size_t)> m_task{};
-  std::vector<std::atomic_bool> m_task_ready_flags{};
-  std::atomic_ulong m_n_items{};
-  std::vector<std::jthread> m_threads{};
+  alignas(std::hardware_destructive_interference_size)
+      detail::LockFreeQueue<detail::Task, queue_size> task_queue_{};
+  alignas(std::hardware_destructive_interference_size) detail::Task
+      active_task_{};
+  alignas(std::hardware_destructive_interference_size) std::atomic_int
+      n_running_threads_{};
+  struct alignas(std::hardware_destructive_interference_size) ReadyFlag
+      : std::atomic_bool {};
+  std::vector<ReadyFlag> task_ready_flags_{};
+  std::vector<std::jthread> threads_{};
 };
 
 // Template version for testing purposes.
-template <std::size_t num_threads>
-struct ThreadPoolTemplateExecutor : ThreadPoolExecutor {
-  ThreadPoolTemplateExecutor() : ThreadPoolExecutor(num_threads) {}
+template <std::size_t num_threads, std::size_t queue_size = 16>
+struct ThreadPoolTemplateExecutor : ThreadPoolExecutor<queue_size> {
+  ThreadPoolTemplateExecutor() : ThreadPoolExecutor<queue_size>(num_threads) {}
 };
 }  // namespace ParX
