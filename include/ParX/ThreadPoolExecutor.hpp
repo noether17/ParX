@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "ParX/ParallelExecutor.hpp"
-#include "ParX/util/Logging.hpp"
 
 namespace ParX {
 namespace detail {
@@ -95,7 +94,6 @@ class ThreadPoolExecutor {
       : task_ready_flags_(n_threads) {
     for (std::size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
       threads_.emplace_back([this, thread_id, n_threads] {
-        SCOPED_LOG("thread ", thread_id);
         auto cached_n_items = std::size_t{};
         auto thread_begin_idx = std::size_t{};
         auto thread_end_idx = std::size_t{};
@@ -117,7 +115,6 @@ class ThreadPoolExecutor {
           }
 
           if (active_task_.operation == nullptr) {
-            FUNCTION_LOG("thread ", thread_id, " stopping work.");
             n_running_threads_.fetch_sub(1, std::memory_order_relaxed);
             break;  // stop-work issued.
           }
@@ -129,7 +126,6 @@ class ThreadPoolExecutor {
             thread_end_idx = std::min((thread_id + 1) * items_per_thread,
                                       active_task_.n_items);
           }
-          FUNCTION_LOG("thread ", thread_id, " executing task.");
           active_task_.operation(thread_begin_idx, thread_end_idx);
           n_running_threads_.fetch_sub(1, std::memory_order_release);
         }
@@ -143,13 +139,11 @@ class ThreadPoolExecutor {
   auto& operator=(ThreadPoolExecutor&&) = delete;
 
   ~ThreadPoolExecutor() {
-    SCOPED_LOG();
     task_queue_.wait_while_full();
     task_queue_.push({});  // Null task indicates stop-work.
   }
 
   auto synchronize() const {
-    SCOPED_LOG();
     task_queue_.wait_until_empty();
     detail::busy_wait_until(n_running_threads_, [](auto n) { return n == 0; });
   }
@@ -158,7 +152,6 @@ class ThreadPoolExecutor {
   void call_kernel(std::size_t n_items, Args... args)
     requires Kernel<kernel, Args...>
   {
-    SCOPED_LOG();
     task_queue_.wait_while_full();
     task_queue_.push({[... args = std::move(args)](std::size_t thread_begin_idx,
                                                    std::size_t thread_end_idx) {
@@ -194,7 +187,6 @@ class ThreadPoolExecutor {
                         TransformArgs... transform_args)
     requires(Reduction<reduce, T> and Transform<transform, T, TransformArgs...>)
   {
-    SCOPED_LOG();
     auto const n_threads = std::ssize(threads_);
     auto thread_partial_results = std::vector<std::optional<T>>(
         n_threads);  // TODO: Remove this allocation (likely need
@@ -206,7 +198,6 @@ class ThreadPoolExecutor {
         n_threads, thread_partial_results.data(), n_items, n_items_per_thread,
         transform_args...);
     synchronize();
-    FUNCTION_LOG("synchronized threads.");
     auto result = init_val;
     for (auto partial_result_iter = thread_partial_results.begin();
          partial_result_iter != thread_partial_results.end() and
