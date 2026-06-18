@@ -14,6 +14,7 @@
 #include "ParX/util/Logging.hpp"
 
 namespace ParX {
+namespace detail {
 /* Waits for predicate(testable) to return true by repeatedly checking the
  * return value. Spins num_spins times, pausing on each spin, before yielding
  * the thread.
@@ -87,6 +88,7 @@ struct Task {
   std::function<void(std::size_t, std::size_t)> operation{};
   std::size_t n_items{};
 };
+}  // namespace detail
 
 template <std::size_t queue_size = 16>
 class ThreadPoolExecutor {
@@ -101,7 +103,8 @@ class ThreadPoolExecutor {
         auto thread_end_idx = std::size_t{};
         while (true) {
           if (thread_id == 0) {
-            busy_wait_until(n_running_threads_, [](auto n) { return n == 0; });
+            detail::busy_wait_until(n_running_threads_,
+                                    [](auto n) { return n == 0; });
             task_queue_.wait_while_empty();
             n_running_threads_.store(n_threads);
             active_task_ = task_queue_.pop();
@@ -109,8 +112,8 @@ class ThreadPoolExecutor {
               f.store(true, std::memory_order_release);
             }
           } else {
-            busy_wait_until(task_ready_flags_[thread_id],
-                            [](auto flag) { return flag; });
+            detail::busy_wait_until(task_ready_flags_[thread_id],
+                                    [](auto flag) { return flag; });
             task_ready_flags_[thread_id].store(false,
                                                std::memory_order_relaxed);
           }
@@ -150,7 +153,7 @@ class ThreadPoolExecutor {
   auto synchronize() const {
     SCOPED_LOG();
     task_queue_.wait_until_empty();
-    busy_wait_until(n_running_threads_, [](auto n) { return n == 0; });
+    detail::busy_wait_until(n_running_threads_, [](auto n) { return n == 0; });
   }
 
   template <auto kernel, typename... Args>
@@ -220,14 +223,14 @@ class ThreadPoolExecutor {
 
  private:
   alignas(std::hardware_destructive_interference_size)
-      LockFreeQueue<Task, queue_size> task_queue_{};
-  alignas(std::hardware_destructive_interference_size) Task active_task_{};
+      detail::LockFreeQueue<detail::Task, queue_size> task_queue_{};
+  alignas(std::hardware_destructive_interference_size) detail::Task
+      active_task_{};
   alignas(std::hardware_destructive_interference_size) std::atomic_int
       n_running_threads_{};
-  struct alignas(std::hardware_destructive_interference_size) Flag
+  struct alignas(std::hardware_destructive_interference_size) ReadyFlag
       : std::atomic_bool {};
-  alignas(std::hardware_destructive_interference_size)
-      std::vector<Flag> task_ready_flags_{};
+  std::vector<ReadyFlag> task_ready_flags_{};
   std::vector<std::jthread> threads_{};
 };
 
