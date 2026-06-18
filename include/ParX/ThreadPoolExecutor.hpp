@@ -64,23 +64,23 @@ class LockFreeQueue {
     return element;
   }
 
-  bool try_push(T const& t) {
-    if (size_.load(std::memory_order_relaxed) >= buffer_size) {
-      return false;
-    }
+  void push(T const& t) {
     new (&buffer_[back_index_ % buffer_size]) T(t);
     ++back_index_;
     size_.fetch_add(1, std::memory_order_release);
-    return true;
   }
 
-  /* Waits for the queue to become empty.
-   */
-  void await() const {
+  void wait_until_empty() const {
     busy_wait(size_, [](auto n) { return n == 0; });
   }
 
-  bool empty() const { return size_.load(std::memory_order_acquire) == 0; }
+  void wait_while_empty() const {
+    busy_wait(size_, [](auto n) { return n != 0; });
+  }
+
+  void wait_while_full() const {
+    busy_wait(size_, [](auto n) { return n < buffer_size; });
+  }
 
  private:
   T* const buffer_{};
@@ -111,7 +111,7 @@ class ThreadPoolExecutor {
         while (true) {
           if (thread_id == 0) {
             busy_wait(n_running_threads_, [](auto n) { return n == 0; });
-            busy_wait(task_queue_, [](auto const& q) { return not q.empty(); });
+            task_queue_.wait_while_empty();
             n_running_threads_.store(n_threads);
             active_task_ = task_queue_.pop();
             for (auto& f : task_ready_flags_) {
@@ -152,14 +152,13 @@ class ThreadPoolExecutor {
 
   ~ThreadPoolExecutor() {
     SCOPED_LOG();
-    busy_wait(task_queue_, [](auto& q) {
-      return q.try_push({});
-    });  // Null task indicates stop-work.
+    task_queue_.wait_while_full();
+    task_queue_.push({});  // Null task indicates stop-work.
   }
 
   auto synchronize() const {
     SCOPED_LOG();
-    task_queue_.await();
+    task_queue_.wait_until_empty();
     busy_wait(n_running_threads_, [](auto n) { return n == 0; });
   }
 
@@ -176,8 +175,8 @@ class ThreadPoolExecutor {
                }
              },
              n_items};
-    busy_wait(task_queue_,
-                         [&](auto& q) { return q.try_push(task); });
+    task_queue_.wait_while_full();
+    task_queue_.push(task);
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
