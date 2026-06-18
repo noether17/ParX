@@ -48,24 +48,15 @@ void busy_wait_until(auto&& atomic_value, auto&& predicate)
 template <typename T, std::size_t buffer_size>
 class LockFreeQueue {
  public:
-  LockFreeQueue()
-      : buffer_{static_cast<T*>(std::malloc(buffer_size * sizeof(T)))} {}
-  LockFreeQueue(LockFreeQueue const&) = delete;
-  LockFreeQueue(LockFreeQueue&&) = delete;
-  auto& operator=(LockFreeQueue const&) = delete;
-  auto& operator=(LockFreeQueue&&) = delete;
-  ~LockFreeQueue() { std::free(buffer_); }
-
   auto pop() {
     auto element = std::move(buffer_[front_index_ % buffer_size]);
-    buffer_[front_index_ % buffer_size].~T();
     ++front_index_;
     size_.fetch_sub(1, std::memory_order_relaxed);
     return element;
   }
 
   void push(T t) {
-    new (&buffer_[back_index_ % buffer_size]) T(std::move(t));
+    buffer_[back_index_ % buffer_size] = std::move(t);
     ++back_index_;
     size_.fetch_add(1, std::memory_order_release);
   }
@@ -83,7 +74,7 @@ class LockFreeQueue {
   }
 
  private:
-  T* const buffer_{};
+  std::array<T, buffer_size> buffer_{};
   alignas(std::hardware_destructive_interference_size)
       std::atomic<std::size_t> size_{};
   alignas(std::hardware_destructive_interference_size) std::size_t
