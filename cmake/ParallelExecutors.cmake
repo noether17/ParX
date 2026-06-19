@@ -17,6 +17,7 @@ set_target_properties("ThreadPoolExecutor" PROPERTIES
   PAR_EXEC_HEADER "ParX/ThreadPoolExecutor.hpp"
   PAR_EXEC_CTOR_PARAMS "CPU_THREADS"
   PAR_EXEC_T_PARAMS "QUEUE_SIZE"
+  PAR_EXEC_IS_ASYNC "YES"
 )
 set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
   "ThreadPoolExecutor"
@@ -28,6 +29,7 @@ set_target_properties("ThreadPoolTemplateExecutor" PROPERTIES
   PAR_EXEC_LANG "CXX"
   PAR_EXEC_HEADER "ParX/ThreadPoolExecutor.hpp"
   PAR_EXEC_T_PARAMS "CPU_THREADS;QUEUE_SIZE"
+  PAR_EXEC_IS_ASYNC "YES"
 )
 set_property(GLOBAL APPEND PROPERTY PARALLEL_EXECUTORS
   "ThreadPoolTemplateExecutor"

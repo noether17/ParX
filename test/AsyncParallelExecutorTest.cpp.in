@@ -68,6 +68,13 @@ class ${TEST_NAME} : public testing::Test {
 
  protected:
   static constexpr auto size = 1;  // Sufficient to check asynchronous behavior.
+  static constexpr auto large_prime =
+      1'009ul;  // This is the first prime number greater than 1,000.
+                // The goal of using this number is to test large tasks that
+                // can't be evenly divided among multiple threads. (The
+                // asynchronous test uses a smaller prime number than the
+                // synchronous test to allow multiple CUDA kernels to run
+                // simultaneously on the same GPU.)
 
   // clang-format off
   static_assert(ParX::AsyncParallelExecutor<${PAR_EXEC_TYPE}>);
@@ -107,7 +114,6 @@ TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
   ParX::call_kernel<increment_kernel<EVEN>>(even_exec, size, data);
   ParX::synchronize(even_exec);
 
-  // Both kernels have incremented the array elements.
 #ifdef __CUDACC__
   cudaMemcpyAsync(v_ptr, data, size * sizeof(ElementType),
                   cudaMemcpyDeviceToHost, memory_stream);
@@ -123,6 +129,14 @@ TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
 #endif
 }
 
+/* This test confirms that ParX::call_kernel<>() runs asynchronously for classes
+ * adhering to the AsyncParallelExecutor concept. It does so by executing two
+ * kernels, the first of which cannot complete until after the second one runs.
+ * If the calls to ParX::call_kernel<>() are not asynchronous, the first call
+ * will block indefinitely. (This is not a practical use case, but it serves
+ * to confirm the asynchronous behavior.) In order for the two kernels to run in
+ * parallel, they must be launched with separate AsyncParallelExecutors.
+ */
 TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
   // clang-format on
 #ifdef __CUDACC__
@@ -163,6 +177,75 @@ TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
 #endif
   for (auto const x : v) {
     EXPECT_EQ(2, x);
+  }
+
+#ifdef __CUDACC__
+  cudaFreeHost(v_ptr);
+  cudaFreeAsync(data, memory_stream);
+#endif
+}
+
+/* This test confirms that the AsyncParallelExecutor continues to perform
+ * correctly for several chained kernel calls on large arrays.
+ */
+TEST_F(${TEST_NAME}, CallKernelAsynchronousStressTest) {
+  // clang-format on
+#ifdef __CUDACC__
+  auto* data = static_cast<ElementType*>(nullptr);
+  cudaMallocAsync(&data, large_prime * sizeof(ElementType), memory_stream);
+  cudaMemsetAsync(data, 0, large_prime * sizeof(ElementType), memory_stream);
+  auto* v_ptr = static_cast<ElementType*>(nullptr);
+  cudaMallocHost(&v_ptr, large_prime * sizeof(ElementType));
+  auto v = std::span{v_ptr, large_prime};
+  cudaStreamSynchronize(memory_stream);
+#else
+  auto v = std::vector<ElementType>(large_prime, 0);
+  auto* data = v.data();
+#endif
+
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+
+  // increment_odd_kernel() is blocked until increment_even_kernel() runs, but
+  // ParX::call_kernel() does not wait for it to complete.
+#ifdef __CUDACC__
+  cudaMemcpyAsync(v_ptr, data, large_prime * sizeof(ElementType),
+                  cudaMemcpyDeviceToHost, memory_stream);
+  cudaStreamSynchronize(memory_stream);
+#endif
+  for (auto const x : v) {
+    EXPECT_EQ(0, x);
+  }
+
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::synchronize(odd_exec);
+  ParX::synchronize(even_exec);
+
+  // Both kernels have incremented the array elements.
+#ifdef __CUDACC__
+  cudaMemcpyAsync(v_ptr, data, large_prime * sizeof(ElementType),
+                  cudaMemcpyDeviceToHost, memory_stream);
+  cudaStreamSynchronize(memory_stream);
+#endif
+  for (auto const x : v) {
+    EXPECT_EQ(20, x);
   }
 
 #ifdef __CUDACC__
