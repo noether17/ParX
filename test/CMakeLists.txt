@@ -55,3 +55,11 @@ foreach(PAR_EXEC IN LISTS PAR_EXECS)
     endif()
   endif()
 endforeach()
+
+add_executable(CudaArrayTest CudaArrayTest.cu)
+target_link_libraries(CudaArrayTest
+  GTest::GTest
+  GTest::Main
+  ParX::ParX
+)
+add_test(NAME CudaArrayTest COMMAND CudaArrayTest)
