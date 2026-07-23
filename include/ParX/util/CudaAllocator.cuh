@@ -53,6 +53,7 @@ struct CudaAllocator {
   // initialization and data transfer
   static void set_n_zero(device_pointer dev_ptr, size_type n) noexcept {
     CUDA_ERROR_CHECK(cudaMemset(dev_ptr.unwrap_device_ptr(), 0, n * sizeof(T)));
+    CUDA_ERROR_CHECK(cudaDeviceSynchronize());
   }
   static void copy_n_from_host(device_pointer dev_ptr, const_pointer host_ptr,
                                size_type n) noexcept {

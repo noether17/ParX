@@ -7,6 +7,9 @@
 #include <vector>
 
 #include "ParX/ParallelExecutor.hpp"
+#ifdef __CUDACC__
+#include "ParX/util/CudaArray.cuh"
+#endif
 
 // clang-format off
 #include "${PAR_EXEC_HEADER}"
@@ -98,35 +101,24 @@ class ${TEST_NAME} : public testing::Test {
  */
 TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
   // clang-format on
-#ifdef __CUDACC__
   auto* data = static_cast<ElementType*>(nullptr);
-  cudaMallocAsync(&data, size * sizeof(ElementType), memory_stream);
-  cudaMemsetAsync(data, 0, size * sizeof(ElementType), memory_stream);
-  auto* v_ptr = static_cast<ElementType*>(nullptr);
-  cudaMallocHost(&v_ptr, size * sizeof(ElementType));
-  auto v = std::span{v_ptr, size};
-  cudaStreamSynchronize(memory_stream);
-#else
   auto v = std::vector<ElementType>(size, 0);
-  auto* data = v.data();
+#ifdef __CUDACC__
+  auto dev_v = ParX::CudaArray<ElementType>{size};
+  data = dev_v.get_device_ptr().unwrap_device_ptr();
+#else
+  data = v.data();
 #endif
 
   ParX::call_kernel<increment_kernel<EVEN>>(even_exec, size, data);
   ParX::synchronize(even_exec);
 
 #ifdef __CUDACC__
-  cudaMemcpyAsync(v_ptr, data, size * sizeof(ElementType),
-                  cudaMemcpyDeviceToHost, memory_stream);
-  cudaStreamSynchronize(memory_stream);
+  ParX::copy_span_device_to_host(v, dev_v);
 #endif
   for (auto const x : v) {
     EXPECT_EQ(1, x);
   }
-
-#ifdef __CUDACC__
-  cudaFreeHost(v_ptr);
-  cudaFreeAsync(data, memory_stream);
-#endif
 }
 
 /* This test confirms that ParX::call_kernel<>() runs asynchronously for classes
@@ -139,17 +131,13 @@ TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
  */
 TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
   // clang-format on
-#ifdef __CUDACC__
   auto* data = static_cast<ElementType*>(nullptr);
-  cudaMallocAsync(&data, size * sizeof(ElementType), memory_stream);
-  cudaMemsetAsync(data, 0, size * sizeof(ElementType), memory_stream);
-  auto* v_ptr = static_cast<ElementType*>(nullptr);
-  cudaMallocHost(&v_ptr, size * sizeof(ElementType));
-  auto v = std::span{v_ptr, size};
-  cudaStreamSynchronize(memory_stream);
-#else
   auto v = std::vector<ElementType>(size, 0);
-  auto* data = v.data();
+#ifdef __CUDACC__
+  auto dev_v = ParX::CudaArray<ElementType>{size};
+  data = dev_v.get_device_ptr().unwrap_device_ptr();
+#else
+  data = v.data();
 #endif
 
   ParX::call_kernel<increment_kernel<ODD>>(odd_exec, size, data);
@@ -157,9 +145,7 @@ TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
   // increment_odd_kernel() is blocked until increment_even_kernel() runs, but
   // ParX::call_kernel() does not wait for it to complete.
 #ifdef __CUDACC__
-  cudaMemcpyAsync(v_ptr, data, size * sizeof(ElementType),
-                  cudaMemcpyDeviceToHost, memory_stream);
-  cudaStreamSynchronize(memory_stream);
+  ParX::copy_span_device_to_host(v, dev_v);
 #endif
   for (auto const x : v) {
     EXPECT_EQ(0, x);
@@ -171,18 +157,11 @@ TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
 
   // Both kernels have incremented the array elements.
 #ifdef __CUDACC__
-  cudaMemcpyAsync(v_ptr, data, size * sizeof(ElementType),
-                  cudaMemcpyDeviceToHost, memory_stream);
-  cudaStreamSynchronize(memory_stream);
+  ParX::copy_span_device_to_host(v, dev_v);
 #endif
   for (auto const x : v) {
     EXPECT_EQ(2, x);
   }
-
-#ifdef __CUDACC__
-  cudaFreeHost(v_ptr);
-  cudaFreeAsync(data, memory_stream);
-#endif
 }
 
 /* This test confirms that the AsyncParallelExecutor continues to perform
@@ -190,17 +169,13 @@ TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
  */
 TEST_F(${TEST_NAME}, CallKernelAsynchronousStressTest) {
   // clang-format on
-#ifdef __CUDACC__
   auto* data = static_cast<ElementType*>(nullptr);
-  cudaMallocAsync(&data, large_prime * sizeof(ElementType), memory_stream);
-  cudaMemsetAsync(data, 0, large_prime * sizeof(ElementType), memory_stream);
-  auto* v_ptr = static_cast<ElementType*>(nullptr);
-  cudaMallocHost(&v_ptr, large_prime * sizeof(ElementType));
-  auto v = std::span{v_ptr, large_prime};
-  cudaStreamSynchronize(memory_stream);
-#else
   auto v = std::vector<ElementType>(large_prime, 0);
-  auto* data = v.data();
+#ifdef __CUDACC__
+  auto dev_v = ParX::CudaArray<ElementType>{large_prime};
+  data = dev_v.get_device_ptr().unwrap_device_ptr();
+#else
+  data = v.data();
 #endif
 
   ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
@@ -217,9 +192,7 @@ TEST_F(${TEST_NAME}, CallKernelAsynchronousStressTest) {
   // increment_odd_kernel() is blocked until increment_even_kernel() runs, but
   // ParX::call_kernel() does not wait for it to complete.
 #ifdef __CUDACC__
-  cudaMemcpyAsync(v_ptr, data, large_prime * sizeof(ElementType),
-                  cudaMemcpyDeviceToHost, memory_stream);
-  cudaStreamSynchronize(memory_stream);
+  ParX::copy_span_device_to_host(v, dev_v);
 #endif
   for (auto const x : v) {
     EXPECT_EQ(0, x);
@@ -240,16 +213,9 @@ TEST_F(${TEST_NAME}, CallKernelAsynchronousStressTest) {
 
   // Both kernels have incremented the array elements.
 #ifdef __CUDACC__
-  cudaMemcpyAsync(v_ptr, data, large_prime * sizeof(ElementType),
-                  cudaMemcpyDeviceToHost, memory_stream);
-  cudaStreamSynchronize(memory_stream);
+  ParX::copy_span_device_to_host(v, dev_v);
 #endif
   for (auto const x : v) {
     EXPECT_EQ(20, x);
   }
-
-#ifdef __CUDACC__
-  cudaFreeHost(v_ptr);
-  cudaFreeAsync(data, memory_stream);
-#endif
 }

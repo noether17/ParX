@@ -5,6 +5,9 @@
 #include <vector>
 
 #include "ParX/ParallelExecutor.hpp"
+#ifdef __CUDACC__
+#include "ParX/util/CudaArray.cuh"
+#endif
 
 // clang-format off
 #include "${PAR_EXEC_HEADER}"
@@ -57,25 +60,15 @@ class ${TEST_NAME} : public testing::Test {
                                   c.data());
     ParX::synchronize(par_exec);
 #else
-    auto dev_a = static_cast<ElementType*>(nullptr);
-    auto dev_b = static_cast<ElementType*>(nullptr);
-    auto dev_c = static_cast<ElementType*>(nullptr);
-    cudaMallocAsync(&dev_a, a.size() * sizeof(ElementType), memory_stream);
-    cudaMallocAsync(&dev_b, b.size() * sizeof(ElementType), memory_stream);
-    cudaMallocAsync(&dev_c, c.size() * sizeof(ElementType), memory_stream);
-    cudaMemcpyAsync(dev_a, a.data(), a.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice, memory_stream);
-    cudaMemcpyAsync(dev_b, b.data(), b.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice, memory_stream);
-    cudaStreamSynchronize(memory_stream);
-    ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a, dev_b, dev_c);
+    auto const dev_a = ParX::CudaArray{a};
+    auto const dev_b = ParX::CudaArray{b};
+    auto dev_c = ParX::CudaArray<ElementType>{a.size()};
+    ParX::call_kernel<add_kernel>(par_exec, a.size(),
+                                  dev_a.get_device_ptr().unwrap_device_ptr(),
+                                  dev_b.get_device_ptr().unwrap_device_ptr(),
+                                  dev_c.get_device_ptr().unwrap_device_ptr());
     ParX::synchronize(par_exec);
-    cudaMemcpyAsync(c.data(), dev_c, c.size() * sizeof(ElementType),
-               cudaMemcpyDeviceToHost, memory_stream);
-    cudaFreeAsync(dev_c, memory_stream);
-    cudaFreeAsync(dev_b, memory_stream);
-    cudaFreeAsync(dev_a, memory_stream);
-    cudaStreamSynchronize(memory_stream);
+    ParX::copy_span_device_to_host(c, dev_c);
 #endif
     return c;
   }
@@ -87,20 +80,13 @@ class ${TEST_NAME} : public testing::Test {
                                   multiply_transform>(
         par_exec, ElementType{}, a.size(), a.data(), b.data());
 #else
-    auto dev_a = static_cast<ElementType*>(nullptr);
-    auto dev_b = static_cast<ElementType*>(nullptr);
-    cudaMallocAsync(&dev_a, a.size() * sizeof(ElementType), memory_stream);
-    cudaMallocAsync(&dev_b, b.size() * sizeof(ElementType), memory_stream);
-    cudaMemcpyAsync(dev_a, a.data(), a.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice, memory_stream);
-    cudaMemcpyAsync(dev_b, b.data(), b.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice, memory_stream);
-    cudaStreamSynchronize(memory_stream);
+    auto const dev_a = ParX::CudaArray{a};
+    auto const dev_b = ParX::CudaArray{b};
     auto result =
         ParX::transform_reduce<ElementType, add_reduction, multiply_transform>(
-            par_exec, ElementType{}, a.size(), dev_a, dev_b);
-    cudaFreeAsync(dev_b, memory_stream);
-    cudaFreeAsync(dev_a, memory_stream);
+            par_exec, ElementType{}, a.size(),
+            dev_a.get_device_ptr().unwrap_device_ptr(),
+            dev_b.get_device_ptr().unwrap_device_ptr());
     return result;
 #endif
   }
@@ -126,15 +112,11 @@ class ${TEST_NAME} : public testing::Test {
                                   identity_transform>(
         par_exec, static_cast<ElementType>(1), a.size(), a.data());
 #else
-    auto dev_a = static_cast<ElementType*>(nullptr);
-    cudaMallocAsync(&dev_a, a.size() * sizeof(ElementType), memory_stream);
-    cudaMemcpyAsync(dev_a, a.data(), a.size() * sizeof(ElementType),
-               cudaMemcpyHostToDevice, memory_stream);
-    cudaStreamSynchronize(memory_stream);
+    auto const dev_a = ParX::CudaArray{a};
     auto result = ParX::transform_reduce<ElementType, multiply_reduction,
                                          identity_transform>(
-        par_exec, static_cast<ElementType>(1), a.size(), dev_a);
-    cudaFreeAsync(dev_a, memory_stream);
+        par_exec, static_cast<ElementType>(1), a.size(),
+        dev_a.get_device_ptr().unwrap_device_ptr());
     return result;
 #endif
   }
@@ -151,16 +133,6 @@ class ${TEST_NAME} : public testing::Test {
   // clang-format off
   static_assert(ParX::ParallelExecutor<${PAR_EXEC_TYPE}>);
   ${PAR_EXEC_TYPE} par_exec{${CTOR_ARGS}};
-
-#ifdef __CUDACC__
-  cudaStream_t memory_stream{};
-  ${TEST_NAME}() {
-    cudaStreamCreateWithFlags(&memory_stream, cudaStreamNonBlocking);
-  }
-  ~${TEST_NAME}() {
-    cudaStreamDestroy(memory_stream);
-  }
-#endif
 };
 
 TEST_F(${TEST_NAME}, SingleSumTest) {
@@ -169,7 +141,7 @@ TEST_F(${TEST_NAME}, SingleSumTest) {
   auto const a = generate_reference_vector(1);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
-    EXPECT_EQ(a[i] + a[i], result[i]);
+    ASSERT_EQ(a[i] + a[i], result[i]);
   }
 }
 
@@ -177,7 +149,7 @@ TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
   auto const a = generate_reference_vector(large_prime);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
-    EXPECT_EQ(a[i] + a[i], result[i]);
+    ASSERT_EQ(a[i] + a[i], result[i]);
   }
 }
 
@@ -186,13 +158,13 @@ TEST_F(${TEST_NAME}, SingleScalarProductTest) {
   // should still produce the correct result.
   auto const a = generate_reference_vector(1);
   auto const result = scalar_product(a, a);
-  EXPECT_EQ(sum_of_squares(1), result);
+  ASSERT_EQ(sum_of_squares(1), result);
 }
 
 TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
   auto const a = generate_reference_vector(large_prime);
   auto const result = scalar_product(a, a);
-  EXPECT_EQ(sum_of_squares(large_prime), result);
+  ASSERT_EQ(sum_of_squares(large_prime), result);
 }
 
 TEST_F(${TEST_NAME}, SingleSequentialProductTest) {
@@ -200,12 +172,12 @@ TEST_F(${TEST_NAME}, SingleSequentialProductTest) {
   // should still produce the correct result.
   auto const a = generate_multiply_reduction_vector(1);
   auto const result = sequential_product(a);
-  EXPECT_EQ(floor_power_of_2(1), result);
+  ASSERT_EQ(floor_power_of_2(1), result);
 }
 
 TEST_F(${TEST_NAME}, LargePrimeSequentialProductTest) {
   auto const a = generate_multiply_reduction_vector(large_prime);
   auto const result = sequential_product(a);
-  EXPECT_EQ(floor_power_of_2(large_prime), result);
+  ASSERT_EQ(floor_power_of_2(large_prime), result);
 }
 // clang-format on
