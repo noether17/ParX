@@ -10,7 +10,7 @@ concept CudaElementType =
     std::is_trivial_v<T> and not std::is_unbounded_array_v<T> and
     not std::is_reference_v<T>;
 
-template <CudaElementType T>
+template <typename T>
 class CudaPtr {
  public:
   using element_type = T;
@@ -31,6 +31,13 @@ class CudaPtr {
   constexpr explicit CudaPtr(pointer dev_ptr) noexcept : dev_ptr_{dev_ptr} {}
   pointer dev_ptr_{};
 };
+
+// namespace detail {
+// template <CudaElementType T>
+// constexpr auto unwrap_argument(CudaPtr<T> const& dev_ptr) noexcept {
+//   return dev_ptr.unwrap_device_ptr();
+// }
+// }  // namespace detail
 
 template <CudaElementType T>
 struct CudaAllocator {

@@ -101,13 +101,12 @@ class ${TEST_NAME} : public testing::Test {
  */
 TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
   // clang-format on
-  auto* data = static_cast<ElementType*>(nullptr);
   auto v = std::vector<ElementType>(size, 0);
 #ifdef __CUDACC__
   auto dev_v = ParX::CudaArray<ElementType>{size};
-  data = dev_v.get_device_ptr().unwrap_device_ptr();
+  auto data = dev_v.get_device_ptr();
 #else
-  data = v.data();
+  auto* data = v.data();
 #endif
 
   ParX::call_kernel<increment_kernel<EVEN>>(even_exec, size, data);
@@ -131,13 +130,12 @@ TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
  */
 TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
   // clang-format on
-  auto* data = static_cast<ElementType*>(nullptr);
   auto v = std::vector<ElementType>(size, 0);
 #ifdef __CUDACC__
   auto dev_v = ParX::CudaArray<ElementType>{size};
-  data = dev_v.get_device_ptr().unwrap_device_ptr();
+  auto data = dev_v.get_device_ptr();
 #else
-  data = v.data();
+  auto* data = v.data();
 #endif
 
   ParX::call_kernel<increment_kernel<ODD>>(odd_exec, size, data);
@@ -169,13 +167,12 @@ TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
  */
 TEST_F(${TEST_NAME}, CallKernelAsynchronousStressTest) {
   // clang-format on
-  auto* data = static_cast<ElementType*>(nullptr);
   auto v = std::vector<ElementType>(large_prime, 0);
 #ifdef __CUDACC__
   auto dev_v = ParX::CudaArray<ElementType>{large_prime};
-  data = dev_v.get_device_ptr().unwrap_device_ptr();
+  auto data = dev_v.get_device_ptr();
 #else
-  data = v.data();
+  auto* data = v.data();
 #endif
 
   ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);

@@ -2,8 +2,10 @@
 
 #include <cstddef>
 #include <limits>
+#include <type_traits>
 
 #include "ParX/ParallelExecutor.hpp"
+#include "ParX/util/CudaAllocator.cuh"
 #include "ParX/util/CudaErrorCheck.cuh"
 
 namespace ParX {
@@ -108,10 +110,13 @@ class CudaExecutor {
 
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
-    requires Kernel<kernel, Args...>
+    requires Kernel<kernel, decltype(detail::unwrap_argument(args))...> and
+             (not((std::is_pointer_v<Args> or ...) or
+                  (std::is_reference_v<Args> or ...)))
   {
-    cuda_call_kernel<kernel, Args...>
-        <<<n_blocks(n_items), block_size, 0, stream_>>>(n_items, args...);
+    cuda_call_kernel<kernel, decltype(detail::unwrap_argument(args))...>
+        <<<n_blocks(n_items), block_size, 0, stream_>>>(
+            n_items, detail::unwrap_argument(args)...);
     CUDA_ERROR_CHECK(cudaGetLastError());
   }
 

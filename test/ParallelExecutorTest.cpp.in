@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstddef>
 #include <numeric>
 #include <vector>
@@ -63,10 +64,12 @@ class ${TEST_NAME} : public testing::Test {
     auto const dev_a = ParX::CudaArray{a};
     auto const dev_b = ParX::CudaArray{b};
     auto dev_c = ParX::CudaArray<ElementType>{a.size()};
-    ParX::call_kernel<add_kernel>(par_exec, a.size(),
-                                  dev_a.get_device_ptr().unwrap_device_ptr(),
-                                  dev_b.get_device_ptr().unwrap_device_ptr(),
-                                  dev_c.get_device_ptr().unwrap_device_ptr());
+    // static_assert(
+    //     ParX::detail::is_cuda_ptr<decltype(dev_a.get_device_ptr())>::value);
+    static_assert(ParX::detail::IsCudaPtr<decltype(dev_a.get_device_ptr())>);
+    ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a.get_device_ptr(),
+                                  dev_b.get_device_ptr(),
+                                  dev_c.get_device_ptr());
     ParX::synchronize(par_exec);
     ParX::copy_span_device_to_host(c, dev_c);
 #endif
