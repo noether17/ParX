@@ -5,12 +5,20 @@
 #include "ParX/util/CudaErrorCheck.cuh"
 
 namespace ParX {
+namespace detail {
+template <typename T, template <typename...> typename ClassTemplate>
+struct is_instantiation_of : std::false_type {};
+template <template <typename...> typename ClassTemplate, typename... Params>
+struct is_instantiation_of<ClassTemplate<Params...>, ClassTemplate>
+    : std::true_type {};
+}  // namespace detail
+
 template <typename T>
 concept CudaElementType =
     std::is_trivial_v<T> and not std::is_unbounded_array_v<T> and
     not std::is_reference_v<T>;
 
-template <typename T>
+template <CudaElementType T>
 class CudaPtr {
  public:
   using element_type = T;
@@ -23,6 +31,7 @@ class CudaPtr {
       : dev_ptr_{reinterpret_cast<pointer>(other.unwrap_device_ptr())} {}
 
   constexpr auto unwrap_device_ptr() const noexcept { return dev_ptr_; }
+  constexpr auto unwrap() const noexcept { return dev_ptr_; }
   static constexpr auto wrap_device_ptr(pointer dev_ptr) noexcept {
     return CudaPtr{dev_ptr};
   }
@@ -31,6 +40,14 @@ class CudaPtr {
   constexpr explicit CudaPtr(pointer dev_ptr) noexcept : dev_ptr_{dev_ptr} {}
   pointer dev_ptr_{};
 };
+
+namespace detail {
+template <typename T>
+concept IsCudaPtr = is_instantiation_of<std::decay_t<T>, CudaPtr>::value;
+// constexpr auto unwrap_argument(IsCudaPtr auto&& dev_ptr) noexcept {
+//   return dev_ptr.unwrap_device_ptr();
+// }
+}  // namespace detail
 
 // namespace detail {
 // template <CudaElementType T>

@@ -67,6 +67,7 @@ class ${TEST_NAME} : public testing::Test {
     // static_assert(
     //     ParX::detail::is_cuda_ptr<decltype(dev_a.get_device_ptr())>::value);
     static_assert(ParX::detail::IsCudaPtr<decltype(dev_a.get_device_ptr())>);
+    static_assert(ParX::detail::Unwrappable<decltype(dev_a.get_device_ptr())>);
     ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a.get_device_ptr(),
                                   dev_b.get_device_ptr(),
                                   dev_c.get_device_ptr());

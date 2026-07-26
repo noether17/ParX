@@ -70,6 +70,12 @@ constexpr decltype(auto) unwrap_argument(auto&& arg) noexcept {
   return std::forward<decltype(arg)>(arg);
 }
 
+template <typename T>
+concept Unwrappable = requires(T const& t) { t.unwrap(); };
+constexpr auto unwrap_argument(Unwrappable auto&& arg) noexcept {
+  return arg.unwrap();
+}
+
 #ifdef __CUDACC__
 /* This CUDA kernel exists solely to ensure that the above operations are
  * compiled for the device. Without it, the ParallelExecutor concept would
@@ -138,21 +144,6 @@ concept ParallelExecutor = detail::KernelExecutor<X, detail::basic_kernel> and
 template <typename X>
 concept AsyncParallelExecutor =
     ParallelExecutor<X> and detail::Synchronizable<X>;
-
-template <typename T>
-class CudaPtr;
-namespace detail {
-template <typename T, template <typename...> typename ClassTemplate>
-struct is_instantiation_of : std::false_type {};
-template <template <typename...> typename ClassTemplate, typename... Ts>
-struct is_instantiation_of<ClassTemplate<Ts...>, ClassTemplate>
-    : std::true_type {};
-template <typename T>
-concept IsCudaPtr = is_instantiation_of<std::decay_t<T>, CudaPtr>::value;
-constexpr auto unwrap_argument(IsCudaPtr auto&& dev_ptr) noexcept {
-  return dev_ptr.unwrap_device_ptr();
-}
-}  // namespace detail
 
 template <auto kernel, ParallelExecutor X, typename... Args>
 void call_kernel(X& exe, std::size_t n_items, Args... args)
