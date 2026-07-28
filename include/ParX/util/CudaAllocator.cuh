@@ -43,17 +43,7 @@ class CudaPtr {
 namespace detail {
 template <typename T>
 concept IsCudaPtr = is_instantiation_of<std::decay_t<T>, CudaPtr>::value;
-// constexpr auto unwrap_argument(IsCudaPtr auto&& dev_ptr) noexcept {
-//   return dev_ptr.unwrap_device_ptr();
-// }
 }  // namespace detail
-
-// namespace detail {
-// template <CudaElementType T>
-// constexpr auto unwrap_argument(CudaPtr<T> const& dev_ptr) noexcept {
-//   return dev_ptr.unwrap_device_ptr();
-// }
-// }  // namespace detail
 
 template <CudaElementType T>
 struct CudaAllocator {
