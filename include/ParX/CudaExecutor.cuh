@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 #include "ParX/ParallelExecutor.hpp"
 #include "ParX/util/CudaAllocator.cuh"
@@ -88,6 +89,16 @@ __global__ void cuda_transform_reduce_final(T* result, T const* block_results,
   }
 }
 
+namespace detail {
+constexpr decltype(auto) unwrap_cuda_argument(auto&& arg) noexcept {
+  return std::forward<decltype(arg)>(arg);
+}
+
+constexpr auto unwrap_cuda_argument(IsCudaPtr auto&& arg) noexcept {
+  return unwrap_argument(std::forward<decltype(arg)>(arg));
+}
+}  // namespace detail
+
 template <std::size_t block_size>
 class CudaExecutor {
   static_assert((block_size & 0x1Ful) == 0);  // Must be a multiple of 32.
@@ -110,13 +121,13 @@ class CudaExecutor {
 
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
-    requires Kernel<kernel, decltype(detail::unwrap_argument(args))...> and
+    requires Kernel<kernel, decltype(detail::unwrap_cuda_argument(args))...> and
              (not((std::is_pointer_v<Args> or ...) or
                   (std::is_reference_v<Args> or ...)))
   {
-    cuda_call_kernel<kernel, decltype(detail::unwrap_argument(args))...>
+    cuda_call_kernel<kernel, decltype(detail::unwrap_cuda_argument(args))...>
         <<<n_blocks(n_items), block_size, 0, stream_>>>(
-            n_items, detail::unwrap_argument(args)...);
+            n_items, detail::unwrap_cuda_argument(args)...);
     CUDA_ERROR_CHECK(cudaGetLastError());
   }
 
