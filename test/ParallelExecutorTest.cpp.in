@@ -88,9 +88,8 @@ class ${TEST_NAME} : public testing::Test {
     auto const dev_b = ParX::CudaArray{b};
     auto result =
         ParX::transform_reduce<ElementType, add_reduction, multiply_transform>(
-            par_exec, ElementType{}, a.size(),
-            dev_a.get_device_ptr().unwrap_device_ptr(),
-            dev_b.get_device_ptr().unwrap_device_ptr());
+            par_exec, ElementType{}, a.size(), dev_a.get_device_ptr().unwrap(),
+            dev_b.get_device_ptr().unwrap());
     return result;
 #endif
   }
@@ -120,7 +119,7 @@ class ${TEST_NAME} : public testing::Test {
     auto result = ParX::transform_reduce<ElementType, multiply_reduction,
                                          identity_transform>(
         par_exec, static_cast<ElementType>(1), a.size(),
-        dev_a.get_device_ptr().unwrap_device_ptr());
+        dev_a.get_device_ptr().unwrap());
     return result;
 #endif
   }
