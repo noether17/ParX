@@ -104,7 +104,7 @@ TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
   auto v = std::vector<ElementType>(size, 0);
 #ifdef __CUDACC__
   auto dev_v = ParX::CudaArray<ElementType>{size};
-  auto data = dev_v.get_device_ptr();
+  auto data = dev_v.data();
 #else
   auto* data = v.data();
 #endif
@@ -133,7 +133,7 @@ TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
   auto v = std::vector<ElementType>(size, 0);
 #ifdef __CUDACC__
   auto dev_v = ParX::CudaArray<ElementType>{size};
-  auto data = dev_v.get_device_ptr();
+  auto data = dev_v.data();
 #else
   auto* data = v.data();
 #endif
@@ -170,7 +170,7 @@ TEST_F(${TEST_NAME}, CallKernelAsynchronousStressTest) {
   auto v = std::vector<ElementType>(large_prime, 0);
 #ifdef __CUDACC__
   auto dev_v = ParX::CudaArray<ElementType>{large_prime};
-  auto data = dev_v.get_device_ptr();
+  auto data = dev_v.data();
 #else
   auto* data = v.data();
 #endif

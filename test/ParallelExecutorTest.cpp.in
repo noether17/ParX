@@ -64,13 +64,10 @@ class ${TEST_NAME} : public testing::Test {
     auto const dev_a = ParX::CudaArray{a};
     auto const dev_b = ParX::CudaArray{b};
     auto dev_c = ParX::CudaArray<ElementType>{a.size()};
-    // static_assert(
-    //     ParX::detail::is_cuda_ptr<decltype(dev_a.get_device_ptr())>::value);
-    static_assert(ParX::detail::IsCudaPtr<decltype(dev_a.get_device_ptr())>);
-    static_assert(ParX::detail::Unwrappable<decltype(dev_a.get_device_ptr())>);
-    ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a.get_device_ptr(),
-                                  dev_b.get_device_ptr(),
-                                  dev_c.get_device_ptr());
+    static_assert(ParX::detail::IsCudaPtr<decltype(dev_a.data())>);
+    static_assert(ParX::detail::Unwrappable<decltype(dev_a.data())>);
+    ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a.data(),
+                                  dev_b.data(), dev_c.data());
     ParX::synchronize(par_exec);
     ParX::copy_span_device_to_host(c, dev_c);
 #endif
@@ -88,8 +85,8 @@ class ${TEST_NAME} : public testing::Test {
     auto const dev_b = ParX::CudaArray{b};
     auto result =
         ParX::transform_reduce<ElementType, add_reduction, multiply_transform>(
-            par_exec, ElementType{}, a.size(), dev_a.get_device_ptr().unwrap(),
-            dev_b.get_device_ptr().unwrap());
+            par_exec, ElementType{}, a.size(), dev_a.data().unwrap(),
+            dev_b.data().unwrap());
     return result;
 #endif
   }
@@ -118,8 +115,7 @@ class ${TEST_NAME} : public testing::Test {
     auto const dev_a = ParX::CudaArray{a};
     auto result = ParX::transform_reduce<ElementType, multiply_reduction,
                                          identity_transform>(
-        par_exec, static_cast<ElementType>(1), a.size(),
-        dev_a.get_device_ptr().unwrap());
+        par_exec, static_cast<ElementType>(1), a.size(), dev_a.data().unwrap());
     return result;
 #endif
   }
