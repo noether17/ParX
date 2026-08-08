@@ -76,11 +76,9 @@ class ${TEST_NAME} : public testing::Test {
   auto vector_sum(std::span<ElementType const> a,
                   std::span<ElementType const> b) {
     auto c = std::vector<ElementType>(a.size());
-    auto const& dev_a = to_parx_range(a);
-    auto const& dev_b = to_parx_range(b);
     auto&& dev_c = to_parx_range(c);
-    ParX::call_kernel<add_kernel>(par_exec, dev_a.size(), dev_a.data(),
-                                  dev_b.data(), dev_c.data());
+    ParX::call_kernel<add_kernel>(par_exec, a.size(), to_parx_range(a).data(),
+                                  to_parx_range(b).data(), dev_c.data());
     ParX::synchronize(par_exec);
     return to_host_range(dev_c);
   }
