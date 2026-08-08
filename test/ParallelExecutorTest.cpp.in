@@ -13,6 +13,26 @@
 // clang-format off
 #include "${PAR_EXEC_HEADER}"
 
+decltype(auto) to_parx_range(auto&& host_range) {
+#ifdef __CUDACC__
+  return ParX::CudaArray{host_range};
+#else
+  return std::forward<decltype(host_range)>(host_range);
+#endif
+}
+
+decltype(auto) to_host_range(auto&& parx_range) {
+#ifdef __CUDACC__
+  auto host_range = std::vector<
+      typename std::remove_cvref_t<decltype(parx_range)>::value_type>(
+      parx_range.size());
+  ParX::copy_span_device_to_host(host_range, parx_range);
+  return host_range;
+#else
+  return std::forward<decltype(parx_range)>(parx_range);
+#endif
+}
+
 class ${TEST_NAME} : public testing::Test {
   // clang-format on
  public:
@@ -47,7 +67,7 @@ class ${TEST_NAME} : public testing::Test {
                     // The goal of using this number is to test large tasks that
                     // can't be evenly divided among multiple threads.
 
-  static auto generate_reference_vector(std::size_t n) {
+  static auto generate_input_vector(std::size_t n) {
     auto v = std::vector<ElementType>(n);
     std::iota(std::begin(v), std::end(v), static_cast<ElementType>(1));
     return v;
@@ -56,22 +76,13 @@ class ${TEST_NAME} : public testing::Test {
   auto vector_sum(std::span<ElementType const> a,
                   std::span<ElementType const> b) {
     auto c = std::vector<ElementType>(a.size());
-#ifndef __CUDACC__
-    ParX::call_kernel<add_kernel>(par_exec, a.size(), a.data(), b.data(),
-                                  c.data());
-    ParX::synchronize(par_exec);
-#else
-    auto const dev_a = ParX::CudaArray{a};
-    auto const dev_b = ParX::CudaArray{b};
-    auto dev_c = ParX::CudaArray<ElementType>{a.size()};
-    static_assert(ParX::detail::IsCudaPtr<decltype(dev_a.data())>);
-    static_assert(ParX::detail::Unwrappable<decltype(dev_a.data())>);
-    ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a.data(),
+    auto const& dev_a = to_parx_range(a);
+    auto const& dev_b = to_parx_range(b);
+    auto&& dev_c = to_parx_range(c);
+    ParX::call_kernel<add_kernel>(par_exec, dev_a.size(), dev_a.data(),
                                   dev_b.data(), dev_c.data());
     ParX::synchronize(par_exec);
-    ParX::copy_span_device_to_host(c, dev_c);
-#endif
-    return c;
+    return to_host_range(dev_c);
   }
 
   auto scalar_product(std::span<ElementType const> a,
@@ -137,7 +148,7 @@ class ${TEST_NAME} : public testing::Test {
 TEST_F(${TEST_NAME}, SingleSumTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_reference_vector(1);
+  auto const a = generate_input_vector(1);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
     ASSERT_EQ(a[i] + a[i], result[i]);
@@ -145,7 +156,7 @@ TEST_F(${TEST_NAME}, SingleSumTest) {
 }
 
 TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
-  auto const a = generate_reference_vector(large_prime);
+  auto const a = generate_input_vector(large_prime);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
     ASSERT_EQ(a[i] + a[i], result[i]);
@@ -155,13 +166,13 @@ TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
 TEST_F(${TEST_NAME}, SingleScalarProductTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_reference_vector(1);
+  auto const a = generate_input_vector(1);
   auto const result = scalar_product(a, a);
   ASSERT_EQ(sum_of_squares(1), result);
 }
 
 TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
-  auto const a = generate_reference_vector(large_prime);
+  auto const a = generate_input_vector(large_prime);
   auto const result = scalar_product(a, a);
   ASSERT_EQ(sum_of_squares(large_prime), result);
 }
