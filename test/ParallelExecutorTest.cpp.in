@@ -85,19 +85,10 @@ class ${TEST_NAME} : public testing::Test {
 
   auto scalar_product(std::span<ElementType const> a,
                       std::span<ElementType const> b) {
-#ifndef __CUDACC__
     return ParX::transform_reduce<ElementType, add_reduction,
                                   multiply_transform>(
-        par_exec, ElementType{}, a.size(), a.data(), b.data());
-#else
-    auto const dev_a = ParX::CudaArray{a};
-    auto const dev_b = ParX::CudaArray{b};
-    auto result =
-        ParX::transform_reduce<ElementType, add_reduction, multiply_transform>(
-            par_exec, ElementType{}, a.size(), dev_a.data().unwrap(),
-            dev_b.data().unwrap());
-    return result;
-#endif
+        par_exec, ElementType{}, a.size(), to_parx_range(a).data(),
+        to_parx_range(b).data());
   }
 
   // Closed-form expression for the sum of the squares of integers from 1 to n.
@@ -124,7 +115,7 @@ class ${TEST_NAME} : public testing::Test {
     auto const dev_a = ParX::CudaArray{a};
     auto result = ParX::transform_reduce<ElementType, multiply_reduction,
                                          identity_transform>(
-        par_exec, static_cast<ElementType>(1), a.size(), dev_a.data().unwrap());
+        par_exec, static_cast<ElementType>(1), a.size(), dev_a.data());
     return result;
 #endif
   }

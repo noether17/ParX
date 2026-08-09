@@ -134,7 +134,12 @@ class CudaExecutor {
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
   auto transform_reduce(T init_val, std::size_t n_items,
                         TransformArgs... transform_args)
-    requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
+    requires(
+        Transform<transform, T,
+                  decltype(detail::unwrap_cuda_argument(transform_args))...> and
+        (not((std::is_pointer_v<TransformArgs> or ...) or
+             (std::is_reference_v<TransformArgs> or ...))) and
+        Reduction<reduce, T>)
   {
     if (n_items == 0) {
       return init_val;
@@ -147,7 +152,8 @@ class CudaExecutor {
 
     cuda_transform_reduce<block_size, T, reduce, transform>
         <<<n_blocks(n_items), block_size, 0, stream_>>>(
-            dev_block_results, n_items, transform_args...);
+            dev_block_results, n_items,
+            detail::unwrap_cuda_argument(transform_args)...);
     CUDA_ERROR_CHECK(cudaGetLastError());
     cuda_transform_reduce_final<block_size, T, reduce>
         <<<1, block_size, 0, stream_>>>(dev_result, dev_block_results,
