@@ -83,16 +83,6 @@ class ${TEST_NAME} : public testing::Test {
   static_assert(ParX::AsyncParallelExecutor<${PAR_EXEC_TYPE}>);
   ${PAR_EXEC_TYPE} even_exec{${CTOR_ARGS}};
   ${PAR_EXEC_TYPE} odd_exec{${CTOR_ARGS}};
-
-#ifdef __CUDACC__
-  cudaStream_t memory_stream{};
-  ${TEST_NAME}() {
-    cudaStreamCreateWithFlags(&memory_stream, cudaStreamNonBlocking);
-  }
-  ~${TEST_NAME}() {
-    cudaStreamDestroy(memory_stream);
-  }
-#endif
 };
 
 /* This test ensures that increment_kernel<EVEN> is loaded prior to running
