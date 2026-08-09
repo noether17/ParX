@@ -107,17 +107,10 @@ class ${TEST_NAME} : public testing::Test {
   }
 
   auto sequential_product(std::span<ElementType const> a) {
-#ifndef __CUDACC__
     return ParX::transform_reduce<ElementType, multiply_reduction,
                                   identity_transform>(
-        par_exec, static_cast<ElementType>(1), a.size(), a.data());
-#else
-    auto const dev_a = ParX::CudaArray{a};
-    auto result = ParX::transform_reduce<ElementType, multiply_reduction,
-                                         identity_transform>(
-        par_exec, static_cast<ElementType>(1), a.size(), dev_a.data());
-    return result;
-#endif
+        par_exec, static_cast<ElementType>(1), a.size(),
+        to_parx_range(a).data());
   }
 
   static constexpr auto floor_power_of_2(std::size_t n) {
