@@ -66,23 +66,26 @@ struct CudaAllocator {
   // initialization and data transfer
   static void set_n_zero(device_pointer dev_ptr, size_type n) noexcept {
     CUDA_ERROR_CHECK(cudaMemset(dev_ptr.unwrap(), 0, n * sizeof(T)));
-    CUDA_ERROR_CHECK(cudaDeviceSynchronize());
+    CUDA_ERROR_CHECK(cudaStreamSynchronize(nullptr));
   }
   static void copy_n_from_host(device_pointer dev_ptr, const_pointer host_ptr,
                                size_type n) noexcept {
     CUDA_ERROR_CHECK(cudaMemcpy(dev_ptr.unwrap(), host_ptr, n * sizeof(T),
                                 cudaMemcpyHostToDevice));
+    CUDA_ERROR_CHECK(cudaStreamSynchronize(nullptr));
   }
   static void copy_n_from_device(device_pointer dev_ptr,
                                  const_device_pointer source_ptr,
                                  size_type n) noexcept {
     CUDA_ERROR_CHECK(cudaMemcpy(dev_ptr.unwrap(), source_ptr.unwrap(),
                                 n * sizeof(T), cudaMemcpyDeviceToDevice));
+    CUDA_ERROR_CHECK(cudaStreamSynchronize(nullptr));
   }
   static void copy_n_to_host(pointer host_ptr, const_device_pointer dev_ptr,
                              size_type n) noexcept {
     CUDA_ERROR_CHECK(cudaMemcpy(host_ptr, dev_ptr.unwrap(), n * sizeof(T),
                                 cudaMemcpyDeviceToHost));
+    CUDA_ERROR_CHECK(cudaStreamSynchronize(nullptr));
   }
 };
 }  // namespace ParX
