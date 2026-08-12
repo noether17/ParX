@@ -67,7 +67,7 @@ class ${TEST_NAME} : public testing::Test {
                     // The goal of using this number is to test large tasks that
                     // can't be evenly divided among multiple threads.
 
-  static auto generate_input_vector(std::size_t n) {
+  static auto make_iota_vector(std::size_t n) {
     auto v = std::vector<ElementType>(n);
     std::iota(std::begin(v), std::end(v), static_cast<ElementType>(1));
     return v;
@@ -96,7 +96,7 @@ class ${TEST_NAME} : public testing::Test {
     return n * (n + 1) * (2 * n + 1) / 6;
   }
 
-  static auto generate_multiply_reduction_vector(std::size_t n) {
+  static auto make_multiply_test_vector(std::size_t n) {
     // The test vector for the multiply reduction needs to be mostly 1s to
     // prevent overflow.
     auto v = std::vector(n, static_cast<ElementType>(1));
@@ -130,7 +130,7 @@ class ${TEST_NAME} : public testing::Test {
 TEST_F(${TEST_NAME}, SingleSumTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_input_vector(1);
+  auto const a = make_iota_vector(1);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
     ASSERT_EQ(a[i] + a[i], result[i]);
@@ -138,7 +138,7 @@ TEST_F(${TEST_NAME}, SingleSumTest) {
 }
 
 TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
-  auto const a = generate_input_vector(large_prime);
+  auto const a = make_iota_vector(large_prime);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
     ASSERT_EQ(a[i] + a[i], result[i]);
@@ -148,13 +148,13 @@ TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
 TEST_F(${TEST_NAME}, SingleScalarProductTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_input_vector(1);
+  auto const a = make_iota_vector(1);
   auto const result = scalar_product(a, a);
   ASSERT_EQ(sum_of_squares(1), result);
 }
 
 TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
-  auto const a = generate_input_vector(large_prime);
+  auto const a = make_iota_vector(large_prime);
   auto const result = scalar_product(a, a);
   ASSERT_EQ(sum_of_squares(large_prime), result);
 }
@@ -162,13 +162,13 @@ TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
 TEST_F(${TEST_NAME}, SingleSequentialProductTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_multiply_reduction_vector(1);
+  auto const a = make_multiply_test_vector(1);
   auto const result = sequential_product(a);
   ASSERT_EQ(floor_power_of_2(1), result);
 }
 
 TEST_F(${TEST_NAME}, LargePrimeSequentialProductTest) {
-  auto const a = generate_multiply_reduction_vector(large_prime);
+  auto const a = make_multiply_test_vector(large_prime);
   auto const result = sequential_product(a);
   ASSERT_EQ(floor_power_of_2(large_prime), result);
 }
