@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <type_traits>
 #include <utility>
 
 namespace ParX {
@@ -59,6 +60,22 @@ inline constexpr auto basic_reduction(T a, T b) {
 
 using TestValueType = double;
 
+/* A ParallelExecutor interface may require different parameter types than the
+ * operations it executes. For example, CudaExecutor requires arrays to be
+ * passed via wrappers that indicate that the data are resident on the CUDA
+ * device. These wrappers must be removable by calling overloads of
+ * unwrap_argument() within the ParallelExecutor implementation.
+ */
+constexpr decltype(auto) unwrap_argument(auto&& arg) noexcept {
+  return std::forward<decltype(arg)>(arg);
+}
+
+template <typename T>
+concept Unwrappable = requires(T const& t) { t.unwrap(); };
+constexpr auto unwrap_argument(Unwrappable auto&& arg) noexcept {
+  return arg.unwrap();
+}
+
 #ifdef __CUDACC__
 /* This CUDA kernel exists solely to ensure that the above operations are
  * compiled for the device. Without it, the ParallelExecutor concept would
@@ -79,7 +96,9 @@ template __global__ void dummy_kernel<TestValueType>();
 
 template <typename X, auto kernel, typename... KArgs>
 concept KernelExecutor =
-    Kernel<kernel, KArgs...> and requires(X& x, KArgs... args) {
+    Kernel<kernel,
+           decltype(detail::unwrap_argument(std::declval<KArgs>()))...> and
+    requires(X& x, KArgs... args) {
       {
         x.template call_kernel<kernel>(std::size_t{}, args...)
       } -> std::same_as<void>;
@@ -88,7 +107,9 @@ concept KernelExecutor =
 template <typename X, typename T, auto reduce, auto transform,
           typename... TArgs>
 concept TransformReduceExecutor =
-    Reduction<reduce, T> and Transform<transform, T, TArgs...> and
+    Reduction<reduce, T> and
+    Transform<transform, T,
+              decltype(detail::unwrap_argument(std::declval<TArgs>()))...> and
     requires(X& x, TArgs... args) {
       {
         x.template transform_reduce<T, reduce, transform>(T{}, std::size_t{},
@@ -126,7 +147,8 @@ concept AsyncParallelExecutor =
 
 template <auto kernel, ParallelExecutor X, typename... Args>
 void call_kernel(X& exe, std::size_t n_items, Args... args)
-  requires Kernel<kernel, Args...>
+  requires Kernel<kernel,
+                  decltype(detail::unwrap_argument(std::declval<Args>()))...>
 {
   exe.template call_kernel<kernel>(n_items, std::move(args)...);
 }
@@ -135,7 +157,10 @@ template <typename T, auto reduce, auto transform, ParallelExecutor X,
           typename... TransformArgs>
 T transform_reduce(X& exe, T init_val, std::size_t n_items,
                    TransformArgs... transform_args)
-  requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
+  requires(Transform<transform, T,
+                     decltype(detail::unwrap_argument(
+                         std::declval<TransformArgs>()))...> and
+           Reduction<reduce, T>)
 {
   return exe.template transform_reduce<T, reduce, transform>(
       init_val, n_items, std::move(transform_args)...);

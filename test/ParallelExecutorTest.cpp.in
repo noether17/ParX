@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstddef>
 #include <numeric>
 #include <vector>
@@ -11,6 +12,26 @@
 
 // clang-format off
 #include "${PAR_EXEC_HEADER}"
+
+decltype(auto) to_parx_range(auto&& host_range) {
+#ifdef __CUDACC__
+  return ParX::CudaArray{host_range};
+#else
+  return std::forward<decltype(host_range)>(host_range);
+#endif
+}
+
+decltype(auto) to_host_range(auto&& parx_range) {
+#ifdef __CUDACC__
+  auto host_range = std::vector<
+      typename std::remove_cvref_t<decltype(parx_range)>::value_type>(
+      parx_range.size());
+  ParX::copy_span_device_to_host(host_range, parx_range);
+  return host_range;
+#else
+  return std::forward<decltype(parx_range)>(parx_range);
+#endif
+}
 
 class ${TEST_NAME} : public testing::Test {
   // clang-format on
@@ -46,7 +67,7 @@ class ${TEST_NAME} : public testing::Test {
                     // The goal of using this number is to test large tasks that
                     // can't be evenly divided among multiple threads.
 
-  static auto generate_reference_vector(std::size_t n) {
+  static auto make_iota_vector(std::size_t n) {
     auto v = std::vector<ElementType>(n);
     std::iota(std::begin(v), std::end(v), static_cast<ElementType>(1));
     return v;
@@ -55,40 +76,19 @@ class ${TEST_NAME} : public testing::Test {
   auto vector_sum(std::span<ElementType const> a,
                   std::span<ElementType const> b) {
     auto c = std::vector<ElementType>(a.size());
-#ifndef __CUDACC__
-    ParX::call_kernel<add_kernel>(par_exec, a.size(), a.data(), b.data(),
-                                  c.data());
+    auto&& dev_c = to_parx_range(c);
+    ParX::call_kernel<add_kernel>(par_exec, a.size(), to_parx_range(a).data(),
+                                  to_parx_range(b).data(), dev_c.data());
     ParX::synchronize(par_exec);
-#else
-    auto const dev_a = ParX::CudaArray{a};
-    auto const dev_b = ParX::CudaArray{b};
-    auto dev_c = ParX::CudaArray<ElementType>{a.size()};
-    ParX::call_kernel<add_kernel>(par_exec, a.size(),
-                                  dev_a.get_device_ptr().unwrap_device_ptr(),
-                                  dev_b.get_device_ptr().unwrap_device_ptr(),
-                                  dev_c.get_device_ptr().unwrap_device_ptr());
-    ParX::synchronize(par_exec);
-    ParX::copy_span_device_to_host(c, dev_c);
-#endif
-    return c;
+    return to_host_range(dev_c);
   }
 
   auto scalar_product(std::span<ElementType const> a,
                       std::span<ElementType const> b) {
-#ifndef __CUDACC__
     return ParX::transform_reduce<ElementType, add_reduction,
                                   multiply_transform>(
-        par_exec, ElementType{}, a.size(), a.data(), b.data());
-#else
-    auto const dev_a = ParX::CudaArray{a};
-    auto const dev_b = ParX::CudaArray{b};
-    auto result =
-        ParX::transform_reduce<ElementType, add_reduction, multiply_transform>(
-            par_exec, ElementType{}, a.size(),
-            dev_a.get_device_ptr().unwrap_device_ptr(),
-            dev_b.get_device_ptr().unwrap_device_ptr());
-    return result;
-#endif
+        par_exec, ElementType{}, a.size(), to_parx_range(a).data(),
+        to_parx_range(b).data());
   }
 
   // Closed-form expression for the sum of the squares of integers from 1 to n.
@@ -96,7 +96,7 @@ class ${TEST_NAME} : public testing::Test {
     return n * (n + 1) * (2 * n + 1) / 6;
   }
 
-  static auto generate_multiply_reduction_vector(std::size_t n) {
+  static auto make_multiply_test_vector(std::size_t n) {
     // The test vector for the multiply reduction needs to be mostly 1s to
     // prevent overflow.
     auto v = std::vector(n, static_cast<ElementType>(1));
@@ -107,18 +107,10 @@ class ${TEST_NAME} : public testing::Test {
   }
 
   auto sequential_product(std::span<ElementType const> a) {
-#ifndef __CUDACC__
     return ParX::transform_reduce<ElementType, multiply_reduction,
                                   identity_transform>(
-        par_exec, static_cast<ElementType>(1), a.size(), a.data());
-#else
-    auto const dev_a = ParX::CudaArray{a};
-    auto result = ParX::transform_reduce<ElementType, multiply_reduction,
-                                         identity_transform>(
         par_exec, static_cast<ElementType>(1), a.size(),
-        dev_a.get_device_ptr().unwrap_device_ptr());
-    return result;
-#endif
+        to_parx_range(a).data());
   }
 
   static constexpr auto floor_power_of_2(std::size_t n) {
@@ -138,7 +130,7 @@ class ${TEST_NAME} : public testing::Test {
 TEST_F(${TEST_NAME}, SingleSumTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_reference_vector(1);
+  auto const a = make_iota_vector(1);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
     ASSERT_EQ(a[i] + a[i], result[i]);
@@ -146,7 +138,7 @@ TEST_F(${TEST_NAME}, SingleSumTest) {
 }
 
 TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
-  auto const a = generate_reference_vector(large_prime);
+  auto const a = make_iota_vector(large_prime);
   auto const result = vector_sum(a, a);
   for (std::size_t i = 0; i < a.size(); ++i) {
     ASSERT_EQ(a[i] + a[i], result[i]);
@@ -156,13 +148,13 @@ TEST_F(${TEST_NAME}, LargePrimeArraySumTest) {
 TEST_F(${TEST_NAME}, SingleScalarProductTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_reference_vector(1);
+  auto const a = make_iota_vector(1);
   auto const result = scalar_product(a, a);
   ASSERT_EQ(sum_of_squares(1), result);
 }
 
 TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
-  auto const a = generate_reference_vector(large_prime);
+  auto const a = make_iota_vector(large_prime);
   auto const result = scalar_product(a, a);
   ASSERT_EQ(sum_of_squares(large_prime), result);
 }
@@ -170,13 +162,13 @@ TEST_F(${TEST_NAME}, LargePrimeArrayScalarProductTest) {
 TEST_F(${TEST_NAME}, SingleSequentialProductTest) {
   // This is not a practical use of a ParallelExecutor, but any ParallelExecutor
   // should still produce the correct result.
-  auto const a = generate_multiply_reduction_vector(1);
+  auto const a = make_multiply_test_vector(1);
   auto const result = sequential_product(a);
   ASSERT_EQ(floor_power_of_2(1), result);
 }
 
 TEST_F(${TEST_NAME}, LargePrimeSequentialProductTest) {
-  auto const a = generate_multiply_reduction_vector(large_prime);
+  auto const a = make_multiply_test_vector(large_prime);
   auto const result = sequential_product(a);
   ASSERT_EQ(floor_power_of_2(large_prime), result);
 }

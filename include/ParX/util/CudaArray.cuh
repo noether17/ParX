@@ -111,16 +111,16 @@ class CudaArray {
     Alloc::deallocate(dev_ptr_);
   }
 
-  constexpr auto size() const noexcept {
+  [[nodiscard]] constexpr auto size() const noexcept {
     FUNCTION_LOG();
     return extent_.extent();
   }
 
-  auto get_device_ptr() noexcept {
+  [[nodiscard]] auto data() noexcept {
     FUNCTION_LOG();
     return dev_ptr_;
   }
-  auto get_device_ptr() const noexcept {
+  [[nodiscard]] auto data() const noexcept {
     FUNCTION_LOG();
     return const_pointer{dev_ptr_};
   }
@@ -161,26 +161,24 @@ class CudaSpan {
   using const_pointer = CudaPtr<T const>;
 
   constexpr CudaSpan(CudaArray<value_type, Extent>& dev_arr) noexcept
-      : dev_ptr_{dev_arr.get_device_ptr()},
-        extent_{detail::get_extent(dev_arr)} {
+      : dev_ptr_{dev_arr.data()}, extent_{detail::get_extent(dev_arr)} {
     FUNCTION_LOG();
   }
 
   constexpr CudaSpan(CudaArray<value_type, Extent> const& dev_arr) noexcept
-      : dev_ptr_{dev_arr.get_device_ptr()},
-        extent_{detail::get_extent(dev_arr)} {
+      : dev_ptr_{dev_arr.data()}, extent_{detail::get_extent(dev_arr)} {
     FUNCTION_LOG();
   }
 
-  constexpr auto data() const noexcept {
+  [[nodiscard]] constexpr auto data() const noexcept {
     FUNCTION_LOG();
     return dev_ptr_;
   }
-  constexpr auto size() const noexcept {
+  [[nodiscard]] constexpr auto size() const noexcept {
     FUNCTION_LOG();
     return extent_.extent();
   }
-  constexpr auto unwrap_device_span() const noexcept {
+  [[nodiscard]] constexpr auto unwrap_device_span() const noexcept {
     FUNCTION_LOG();
     return std::span<T, Extent>{dev_ptr_.unwrap_device_ptr(), size()};
   }

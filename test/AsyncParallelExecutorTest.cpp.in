@@ -14,6 +14,26 @@
 // clang-format off
 #include "${PAR_EXEC_HEADER}"
 
+decltype(auto) to_parx_range(auto&& host_range) {
+#ifdef __CUDACC__
+  return ParX::CudaArray{host_range};
+#else
+  return std::forward<decltype(host_range)>(host_range);
+#endif
+}
+
+decltype(auto) to_host_range(auto&& parx_range) {
+#ifdef __CUDACC__
+  auto host_range = std::vector<
+      typename std::remove_cvref_t<decltype(parx_range)>::value_type>(
+      parx_range.size());
+  ParX::copy_span_device_to_host(host_range, parx_range);
+  return host_range;
+#else
+  return std::forward<decltype(parx_range)>(parx_range);
+#endif
+}
+
 #ifndef __CUDACC__
   template <typename T>
   using AtomicRef = std::atomic_ref<T>;
@@ -83,16 +103,6 @@ class ${TEST_NAME} : public testing::Test {
   static_assert(ParX::AsyncParallelExecutor<${PAR_EXEC_TYPE}>);
   ${PAR_EXEC_TYPE} even_exec{${CTOR_ARGS}};
   ${PAR_EXEC_TYPE} odd_exec{${CTOR_ARGS}};
-
-#ifdef __CUDACC__
-  cudaStream_t memory_stream{};
-  ${TEST_NAME}() {
-    cudaStreamCreateWithFlags(&memory_stream, cudaStreamNonBlocking);
-  }
-  ~${TEST_NAME}() {
-    cudaStreamDestroy(memory_stream);
-  }
-#endif
 };
 
 /* This test ensures that increment_kernel<EVEN> is loaded prior to running
@@ -101,22 +111,13 @@ class ${TEST_NAME} : public testing::Test {
  */
 TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
   // clang-format on
-  auto* data = static_cast<ElementType*>(nullptr);
   auto v = std::vector<ElementType>(size, 0);
-#ifdef __CUDACC__
-  auto dev_v = ParX::CudaArray<ElementType>{size};
-  data = dev_v.get_device_ptr().unwrap_device_ptr();
-#else
-  data = v.data();
-#endif
+  auto&& dev_v = to_parx_range(v);
 
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, size, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, size, dev_v.data());
   ParX::synchronize(even_exec);
 
-#ifdef __CUDACC__
-  ParX::copy_span_device_to_host(v, dev_v);
-#endif
-  for (auto const x : v) {
+  for (auto const x : to_host_range(dev_v)) {
     EXPECT_EQ(1, x);
   }
 }
@@ -131,35 +132,23 @@ TEST_F(${TEST_NAME}, IncrementEvenKernelIncrements) {
  */
 TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
   // clang-format on
-  auto* data = static_cast<ElementType*>(nullptr);
   auto v = std::vector<ElementType>(size, 0);
-#ifdef __CUDACC__
-  auto dev_v = ParX::CudaArray<ElementType>{size};
-  data = dev_v.get_device_ptr().unwrap_device_ptr();
-#else
-  data = v.data();
-#endif
+  auto&& dev_v = to_parx_range(v);
 
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, size, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, size, dev_v.data());
 
   // increment_odd_kernel() is blocked until increment_even_kernel() runs, but
   // ParX::call_kernel() does not wait for it to complete.
-#ifdef __CUDACC__
-  ParX::copy_span_device_to_host(v, dev_v);
-#endif
-  for (auto const x : v) {
+  for (auto const x : to_host_range(dev_v)) {
     EXPECT_EQ(0, x);
   }
 
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, size, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, size, dev_v.data());
   ParX::synchronize(odd_exec);
   ParX::synchronize(even_exec);
 
   // Both kernels have incremented the array elements.
-#ifdef __CUDACC__
-  ParX::copy_span_device_to_host(v, dev_v);
-#endif
-  for (auto const x : v) {
+  for (auto const x : to_host_range(dev_v)) {
     EXPECT_EQ(2, x);
   }
 }
@@ -169,53 +158,51 @@ TEST_F(${TEST_NAME}, CallKernelRunsAsynchronously) {
  */
 TEST_F(${TEST_NAME}, CallKernelAsynchronousStressTest) {
   // clang-format on
-  auto* data = static_cast<ElementType*>(nullptr);
   auto v = std::vector<ElementType>(large_prime, 0);
-#ifdef __CUDACC__
-  auto dev_v = ParX::CudaArray<ElementType>{large_prime};
-  data = dev_v.get_device_ptr().unwrap_device_ptr();
-#else
-  data = v.data();
-#endif
+  auto&& dev_v = to_parx_range(v);
 
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
+  ParX::call_kernel<increment_kernel<ODD>>(odd_exec, large_prime, dev_v.data());
 
   // increment_odd_kernel() is blocked until increment_even_kernel() runs, but
   // ParX::call_kernel() does not wait for it to complete.
-#ifdef __CUDACC__
-  ParX::copy_span_device_to_host(v, dev_v);
-#endif
-  for (auto const x : v) {
+  for (auto const x : to_host_range(dev_v)) {
     EXPECT_EQ(0, x);
   }
 
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
-  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime, data);
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
+  ParX::call_kernel<increment_kernel<EVEN>>(even_exec, large_prime,
+                                            dev_v.data());
   ParX::synchronize(odd_exec);
   ParX::synchronize(even_exec);
 
   // Both kernels have incremented the array elements.
-#ifdef __CUDACC__
-  ParX::copy_span_device_to_host(v, dev_v);
-#endif
-  for (auto const x : v) {
+  for (auto const x : to_host_range(dev_v)) {
     EXPECT_EQ(20, x);
   }
 }
