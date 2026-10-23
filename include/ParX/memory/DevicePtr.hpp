@@ -27,16 +27,12 @@ class DevicePtr {
 
   // Explicitly convert to/from raw pointers.
   constexpr auto raw_ptr() const noexcept { return dev_ptr_; }
-  friend constexpr auto wrap_device_ptr(pointer raw_dev_ptr) noexcept {
+  static constexpr auto wrap_device_ptr(pointer raw_dev_ptr) noexcept {
     return DevicePtr(raw_dev_ptr);
   }
 
   friend constexpr auto operator+(DevicePtr dev_ptr, std::size_t i) noexcept {
     return DevicePtr{dev_ptr.raw_ptr() + i};
-  }
-
-  friend constexpr auto operator-(DevicePtr a, DevicePtr b) noexcept {
-    return a.raw_ptr() - b.raw_ptr();
   }
 
  private:

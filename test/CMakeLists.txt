@@ -13,6 +13,7 @@ if(CMAKE_CUDA_COMPILER)
     -Xcompiler -Wextra \
     -Xcompiler -Werror \
     -Xcompiler -O3 \
+    --std=c++23 \
     --expt-relaxed-constexpr"
   )
 else()
@@ -63,3 +64,19 @@ target_link_libraries(CudaArrayTest
   ParX::ParX
 )
 add_test(NAME CudaArrayTest COMMAND CudaArrayTest)
+
+add_executable(CudaDeviceManagerTest CudaDeviceManagerTest.cu)
+target_link_libraries(CudaDeviceManagerTest
+  GTest::GTest
+  GTest::Main
+  ParX::ParX
+)
+add_test(NAME CudaDeviceManagerTest COMMAND CudaDeviceManagerTest)
+
+add_executable(HostArrayTest HostArrayTest.cpp)
+target_link_libraries(HostArrayTest
+  GTest::GTest
+  GTest::Main
+  ParX::ParX
+)
+add_test(NAME HostArrayTest COMMAND HostArrayTest)

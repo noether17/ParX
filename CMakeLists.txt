@@ -9,7 +9,7 @@ target_include_directories("${PROJECT_NAME}" INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-target_compile_features("${PROJECT_NAME}" INTERFACE cxx_std_20)
+target_compile_features("${PROJECT_NAME}" INTERFACE cxx_std_23)
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" TYPE INCLUDE)
 include(CMakePackageConfigHelpers)
