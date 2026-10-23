@@ -80,3 +80,19 @@ target_link_libraries(HostArrayTest
   ParX::ParX
 )
 add_test(NAME HostArrayTest COMMAND HostArrayTest)
+
+add_executable(CudaDeviceArrayTest CudaDeviceArrayTest.cu)
+target_link_libraries(CudaDeviceArrayTest
+  GTest::GTest
+  GTest::Main
+  ParX::ParX
+)
+add_test(NAME CudaDeviceArrayTest COMMAND CudaDeviceArrayTest)
+
+add_executable(CudaUnifiedArrayTest CudaUnifiedArrayTest.cu)
+target_link_libraries(CudaUnifiedArrayTest
+  GTest::GTest
+  GTest::Main
+  ParX::ParX
+)
+add_test(NAME CudaUnifiedArrayTest COMMAND CudaUnifiedArrayTest)

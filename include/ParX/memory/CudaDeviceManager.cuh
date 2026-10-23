@@ -49,6 +49,10 @@ struct CudaDeviceManager {
   static void destroy(pointer dev_ptr) noexcept {
     CUDA_ERROR_CHECK(cudaFree(dev_ptr));
   }
+
+  static void set_n_zero(pointer dev_ptr, size_type n) noexcept {
+    CUDA_ERROR_CHECK(cudaMemset(dev_ptr, 0, n * sizeof(T)));
+  }
 };
 
 }  // namespace ParX::memory

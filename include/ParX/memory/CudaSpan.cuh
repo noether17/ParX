@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <ranges>
 
 #include "HostSpan.hpp"
 #include "ParX/util/CudaErrorCheck.cuh"
@@ -26,9 +27,16 @@ concept CudaSpan = detail::is_span_v<T> and CudaAccessible<T>;
 template <typename T>
 concept CudaCopyableSpan = HostSpan<T> or CudaSpan<T>;
 
-void copy(CudaCopyableSpan auto&& src, CudaCopyableSpan auto&& dest) noexcept
-  requires(src.extent == dest.extent)
-{
+template <typename T>
+concept CudaAccessibleContiguousRange =
+    std::ranges::contiguous_range<T> and CudaAccessible<T>;
+
+template <typename T>
+concept CudaCopyableContiguousRange =
+    HostContiguousRange<T> or CudaAccessibleContiguousRange<T>;
+
+void copy(CudaCopyableContiguousRange auto&& src,
+          CudaCopyableContiguousRange auto&& dest) noexcept {
   CUDA_ERROR_CHECK(cudaMemcpy(dest.data(), src.data(),
                               src.size() * sizeof(*src.data()),
                               cudaMemcpyDefault));

@@ -81,8 +81,8 @@ class Array {
   using value_type = Manager<T>::value_type;
   using size_type = std::size_t;
   using difference_type = std::ptrdiff_t;
-  using pointer = Manager<T>::pointer;
-  using const_pointer = Manager<T const>::pointer;
+  using pointer = value_type*;
+  using const_pointer = value_type const*;
   using span = std::span<value_type, Extent>;
   static constexpr auto extent = Extent;
 
@@ -149,22 +149,26 @@ class Array {
 };
 
 // Deduction guides for Array.
-template <typename T, std::size_t E>
-Array(T (&)[E]) -> Array<std::remove_cv_t<T>, E>;
+template <typename T, std::size_t E,
+          template <typename> typename M = HostManager>
+Array(T (&)[E]) -> Array<std::remove_cv_t<T>, E, M>;
 template <typename T, std::size_t E,
           template <typename> typename M = HostManager>
 Array(std::array<T, E>) -> Array<std::remove_cv_t<T>, E, M>;
-template <typename T>
-Array(std::vector<T>) -> Array<std::remove_cv_t<T>>;
+template <typename T, std::size_t E = std::dynamic_extent,
+          template <typename> typename M = HostManager>
+Array(std::vector<T>) -> Array<std::remove_cv_t<T>, E, M>;
 
 template <typename T, std::size_t Extent = std::dynamic_extent>
 using HostArray = Array<T, Extent, HostManager>;
 
 static auto const ha = HostArray(std::array<int, 1>{});
+static auto const hv = HostArray(std::vector<int>{});
 
 template <typename T, std::size_t Extent = std::dynamic_extent>
 using Host2Array = Array<T, Extent, HostManager2>;
 
 static auto const ha2 = Host2Array(std::array<int, 1>{});
+static auto const hv2 = Host2Array(std::vector<int>{});
 
 }  // namespace ParX::memory
