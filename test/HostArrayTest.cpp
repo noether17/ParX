@@ -5,6 +5,7 @@
 #include <span>
 
 #include "ParX/memory/Array.hpp"
+#include "ParX/memory/HostArray.hpp"
 #include "ParX/memory/HostSpan.hpp"
 
 #define EXPECT_SPAN_EQ(correct_values, test_values)        \
