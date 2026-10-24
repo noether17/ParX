@@ -3,13 +3,13 @@
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
+#include <ranges>
 #include <span>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "ParX/memory/HostSpan.hpp"
-#include "ParX/memory/copy.hpp"
 
 namespace ParX::memory {
 
@@ -26,6 +26,9 @@ concept MemoryManager = requires(T t) {
 };
 
 }  // namespace detail
+
+void copy(std::ranges::contiguous_range auto&& src,
+          std::ranges::contiguous_range auto&& dest);
 
 template <template <typename> typename Manager, typename T,
           std::size_t Extent = std::dynamic_extent>
