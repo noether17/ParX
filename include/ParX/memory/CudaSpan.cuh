@@ -3,7 +3,7 @@
 #include <concepts>
 #include <ranges>
 
-#include "HostSpan.hpp"
+#include "ParX/memory/HostSpan.hpp"
 #include "ParX/util/CudaErrorCheck.cuh"
 
 namespace ParX::memory {
@@ -20,12 +20,6 @@ concept CudaAccessible =
 
 template <typename T>
 concept CudaCopyable = HostResident<T> or CudaAccessible<T>;
-
-template <typename T>
-concept CudaSpan = detail::is_span_v<T> and CudaAccessible<T>;
-
-template <typename T>
-concept CudaCopyableSpan = HostSpan<T> or CudaSpan<T>;
 
 template <typename T>
 concept CudaAccessibleContiguousRange =

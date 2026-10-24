@@ -17,19 +17,11 @@ struct space;
 template <typename T>
 using space_t = space<std::remove_reference_t<T>>::type;
 
-template <typename T>
-struct is_span;
-template <typename T>
-constexpr auto is_span_v = is_span<std::remove_reference_t<T>>::value;
-
 }  // namespace detail
 
 template <typename T>
 concept HostResident =
     std::same_as<detail::HostResidentTag, detail::space_t<T>>;
-
-template <typename T>
-concept HostSpan = detail::is_span_v<T> and HostResident<T>;
 
 template <typename T>
 concept HostContiguousRange =
@@ -76,12 +68,6 @@ template <typename T>
 struct space<T> {
   using type = space_t<std::ranges::range_value_t<T>>;
 };
-
-template <typename T>
-struct is_span : std::false_type {};
-
-template <typename T, std::size_t Extent>
-struct is_span<std::span<T, Extent>> : std::true_type {};
 
 }  // namespace detail
 
