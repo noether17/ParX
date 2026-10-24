@@ -4,7 +4,7 @@
 #include <array>
 #include <numeric>
 
-#include "ParX/memory/CudaDeviceManager.cuh"
+#include "ParX/memory/CudaDeviceArray.cuh"
 
 #define EXPECT_SPAN_EQ(correct_values, test_values)        \
   for (auto i = 0ul; i < std::size(correct_values); ++i) { \
@@ -32,7 +32,7 @@ TEST(CudaDeviceManagerTest, RoundTripTest) {
   auto host_span = std::span{host_array.data(), host_array.size()};
 
   auto cuda_dev_ptr =
-      ParX::memory::CudaDeviceManager<int>::create(host_array.size());
+      ParX::memory::detail::CudaDeviceManager<int>::create(host_array.size());
   auto cuda_span = std::span{cuda_dev_ptr, host_array.size()};
 
   ParX::memory::copy(host_span, cuda_span);
@@ -42,7 +42,7 @@ TEST(CudaDeviceManagerTest, RoundTripTest) {
   ParX::memory::copy(cuda_span, result_span);
   EXPECT_SPAN_EQ(host_span, result_span);
 
-  ParX::memory::CudaDeviceManager<int>::destroy(cuda_dev_ptr);
+  ParX::memory::detail::CudaDeviceManager<int>::destroy(cuda_dev_ptr);
 }
 
 TEST(CudaDeviceManagerTest, ScaleTest) {
@@ -62,7 +62,7 @@ TEST(CudaDeviceManagerTest, ScaleTest) {
   auto scaled_span = std::span{scaled_array.data(), scaled_array.size()};
 
   auto cuda_dev_ptr =
-      ParX::memory::CudaDeviceManager<int>::create(host_array.size());
+      ParX::memory::detail::CudaDeviceManager<int>::create(host_array.size());
   auto cuda_span = std::span{cuda_dev_ptr, host_array.size()};
 
   ParX::memory::copy(host_span, cuda_span);
@@ -73,5 +73,5 @@ TEST(CudaDeviceManagerTest, ScaleTest) {
   ParX::memory::copy(cuda_span, result_span);
   EXPECT_SPAN_EQ(scaled_span, result_span);
 
-  ParX::memory::CudaDeviceManager<int>::destroy(cuda_dev_ptr);
+  ParX::memory::detail::CudaDeviceManager<int>::destroy(cuda_dev_ptr);
 }

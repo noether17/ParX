@@ -42,6 +42,6 @@ struct CudaUnifiedManager {
 }  // namespace detail
 
 template <typename T, std::size_t Extent = std::dynamic_extent>
-using CudaUnifiedArray = Array<T, Extent, detail::CudaUnifiedManager>;
+using CudaUnifiedArray = Array<detail::CudaUnifiedManager, T, Extent>;
 
 }  // namespace ParX::memory

@@ -28,8 +28,8 @@ concept MemoryManager = requires(T t) {
 
 }  // namespace detail
 
-template <typename T, std::size_t Extent = std::dynamic_extent,
-          template <typename> typename Manager = HostManager>
+template <template <typename> typename Manager, typename T,
+          std::size_t Extent = std::dynamic_extent>
   requires detail::MemoryManager<Manager<T>>
 class Array {
  public:
@@ -105,12 +105,12 @@ class Array {
 // Deduction guides for Array.
 template <typename T, std::size_t E,
           template <typename> typename M = HostManager>
-Array(T (&)[E]) -> Array<std::remove_cv_t<T>, E, M>;
+Array(T (&)[E]) -> Array<M, std::remove_cv_t<T>, E>;
 template <typename T, std::size_t E,
           template <typename> typename M = HostManager>
-Array(std::array<T, E>) -> Array<std::remove_cv_t<T>, E, M>;
+Array(std::array<T, E>) -> Array<M, std::remove_cv_t<T>, E>;
 template <typename T, std::size_t E = std::dynamic_extent,
           template <typename> typename M = HostManager>
-Array(std::vector<T>) -> Array<std::remove_cv_t<T>, E, M>;
+Array(std::vector<T>) -> Array<M, std::remove_cv_t<T>, E>;
 
 }  // namespace ParX::memory
