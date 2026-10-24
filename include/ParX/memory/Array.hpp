@@ -8,7 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "ParX/memory/HostManager.hpp"
 #include "ParX/memory/HostSpan.hpp"
 #include "ParX/memory/copy.hpp"
 
@@ -102,15 +101,33 @@ class Array {
   [[no_unique_address]] Manager<T> manager_{};
 };
 
+namespace detail {
+
+template <typename T>
+  requires std::is_trivially_copyable_v<T>
+struct HostManager {
+  using value_type = T;
+  using pointer = value_type*;
+  using size_type = std::size_t;
+
+  static auto create(size_type n) noexcept { return new T[n]; }
+  static void destroy(pointer ptr) noexcept { delete[] ptr; }
+  static void set_n_zero(pointer ptr, size_type n) noexcept {
+    std::fill_n(ptr, n, value_type{});
+  }
+};
+
+}  // namespace detail
+
 // Deduction guides for Array.
 template <typename T, std::size_t E,
-          template <typename> typename M = HostManager>
+          template <typename> typename M = detail::HostManager>
 Array(T (&)[E]) -> Array<M, std::remove_cv_t<T>, E>;
 template <typename T, std::size_t E,
-          template <typename> typename M = HostManager>
+          template <typename> typename M = detail::HostManager>
 Array(std::array<T, E>) -> Array<M, std::remove_cv_t<T>, E>;
 template <typename T, std::size_t E = std::dynamic_extent,
-          template <typename> typename M = HostManager>
+          template <typename> typename M = detail::HostManager>
 Array(std::vector<T>) -> Array<M, std::remove_cv_t<T>, E>;
 
 }  // namespace ParX::memory

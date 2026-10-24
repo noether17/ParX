@@ -8,6 +8,6 @@
 namespace ParX::memory {
 
 template <typename T, std::size_t Extent = std::dynamic_extent>
-using HostArray = Array<HostManager, T, Extent>;
+using HostArray = Array<detail::HostManager, T, Extent>;
 
-}
+}  // namespace ParX::memory
