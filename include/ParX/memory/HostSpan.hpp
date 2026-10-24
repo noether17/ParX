@@ -35,12 +35,6 @@ template <typename T>
 concept HostContiguousRange =
     std::ranges::contiguous_range<T> and HostResident<T>;
 
-// void copy(HostSpan auto&& src, HostSpan auto&& dest) noexcept
-//   requires(src.extent == dest.extent)
-//{
-//   std::ranges::copy(src, std::begin(dest));
-// }
-
 void copy(HostContiguousRange auto&& src,
           HostContiguousRange auto&& dest) noexcept {
   std::ranges::copy(src, std::ranges::begin(dest));

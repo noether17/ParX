@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <span>
 #include <type_traits>
@@ -9,16 +10,31 @@
 
 #include "ParX/memory/HostManager.hpp"
 #include "ParX/memory/HostSpan.hpp"
+#include "ParX/memory/copy.hpp"
 
 namespace ParX::memory {
 
+namespace detail {
+
+template <typename T>
+concept MemoryManager = requires(T t) {
+  typename T::value_type;
+  { t.create(std::size_t{}) } -> std::same_as<typename T::value_type*>;
+  { t.destroy(std::declval<typename T::value_type*>()) } -> std::same_as<void>;
+  {
+    t.set_n_zero(std::declval<typename T::value_type*>(), std::size_t{})
+  } -> std::same_as<void>;
+};
+
+}  // namespace detail
+
 template <typename T, std::size_t Extent = std::dynamic_extent,
           template <typename> typename Manager = HostManager>
+  requires detail::MemoryManager<Manager<T>>
 class Array {
  public:
   using value_type = Manager<T>::value_type;
   using size_type = std::size_t;
-  using difference_type = std::ptrdiff_t;
   using pointer = value_type*;
   using const_pointer = value_type const*;
   using span = std::span<value_type, Extent>;
@@ -27,13 +43,13 @@ class Array {
   Array() noexcept
     requires(extent != std::dynamic_extent)
       : span_{manager_.create(extent), extent} {
-    manager_.set_n_zero(data(), extent);
+    manager_.set_n_zero(data(), size());
   }
 
-  explicit Array(size_type size) noexcept
+  explicit Array(size_type n) noexcept
     requires(extent == std::dynamic_extent)
-      : span_{manager_.create(size), size} {
-    manager_.set_n_zero(span_.data(), span_.size());
+      : span_{manager_.create(n), n} {
+    manager_.set_n_zero(data(), size());
   }
 
   explicit Array(std::span<T const, extent> host_span) noexcept
