@@ -1,9 +1,14 @@
 #pragma once
 
+#include <concepts>
+#include <cuda/std/utility>
 #include <span>
+#include <type_traits>
+#include <utility>
 
 #include "ParX/memory/Array.hpp"
 #include "ParX/memory/CudaSpan.cuh"
+#include "ParX/memory/HostSpan.hpp"
 
 namespace ParX::memory {
 
@@ -58,5 +63,58 @@ struct CudaDeviceManager {
 
 template <typename T, std::size_t Extent = std::dynamic_extent>
 using CudaDeviceArray = Array<detail::CudaDeviceManager, T, Extent>;
+
+// static_assert(
+//     std::same_as<
+//         int&&,
+//         remove_space_tag_t<detail::CudaDeviceManager<int>::value_type>>);
+
+//__device__ auto&& remove_cuda_accessible_tag(auto&&);
+//__device__ auto&& remove_cuda_accessible_tag(HostResident auto&& value) {
+//  return std::forward<decltype(value)>(value);
+//}
+//__device__ auto&& remove_cuda_accessible_tag(auto&& value)
+//  requires(not HostResident<decltype(value)> and
+//           requires {
+//             { value.value() };
+//           })
+//{
+//  return reinterpret_cast<
+//      copy_reference_t<decltype(value), decltype(value.value())>>(value);
+//}
+//__device__ auto&& remove_cuda_accessible_tag(auto&& value)
+//  requires(not HostResident<decltype(value)> and
+//           detail::IsPointer<decltype(value)>)
+//{
+//  return reinterpret_cast<copy_reference_t<
+//      decltype(value),
+//      std::remove_reference_t<decltype(remove_cuda_accessible_tag(*value))>*>>(
+//      value);
+//}
+//__device__ auto&& remove_cuda_accessible_tag(auto&& value)
+//  requires(not HostResident<decltype(value)> and
+//           std::ranges::contiguous_range<decltype(value)>)
+//{
+//  return reinterpret_cast<copy_reference_t<
+//      decltype(value), replace_span_value_type_t<
+//                           decltype(value),
+//                           decltype(remove_cuda_accessible_tag(
+//                                                *value.data()))>>>(value);
+//}
+
+template <typename T>
+using remove_cuda_accessible_tag_t =
+    decltype(remove_space_tag(cuda::std::declval<T>()));
+
+__device__ auto dummy() {
+  static_assert(
+      std::same_as<int&&, remove_cuda_accessible_tag_t<
+                              detail::CudaDeviceManager<int>::value_type>>);
+  auto x = *remove_space_tag(detail::CudaDeviceManager<int>::pointer{});
+}
+// static_assert(
+//     std::same_as<int&&, remove_cuda_accessible_tag_t<
+//                             detail::CudaDeviceManager<int>::value_type>>);
+// inline auto x = *remove_space_tag(detail::CudaDeviceManager<int>::pointer{});
 
 }  // namespace ParX::memory
