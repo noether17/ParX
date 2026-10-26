@@ -5,6 +5,7 @@
 #include <span>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "ParX/memory/Array.hpp"
 #include "ParX/memory/CudaSpan.cuh"
@@ -20,6 +21,7 @@ struct CudaDeviceManager {
   class value_type {
    public:
     using space_tag = CudaAccessibleTag;
+    using raw_type = T;
 
     __device__ value_type() {}
     __device__ value_type(value_type const& other) : value_{other.value_} {}
@@ -62,7 +64,20 @@ struct CudaDeviceManager {
 }  // namespace detail
 
 template <typename T, std::size_t Extent = std::dynamic_extent>
-using CudaDeviceArray = Array<detail::CudaDeviceManager, T, Extent>;
+using CudaDeviceArray = Array<T, Extent, detail::CudaDeviceManager>;
+
+static auto const host_vector = [] {
+  auto v = std::vector<int>(10);
+  return v;
+}();
+static auto const cuda_vector = [] {
+  auto cuv = CudaDeviceArray{host_vector};
+  return cuv;
+}();
+static auto const cuda_vector_from_span = [] {
+  auto cuv_span = CudaDeviceArray{std::span{host_vector}};
+  return cuv_span;
+}();
 
 // static_assert(
 //     std::same_as<

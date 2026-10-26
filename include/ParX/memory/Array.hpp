@@ -25,13 +25,42 @@ concept MemoryManager = requires(T t) {
   } -> std::same_as<void>;
 };
 
+template <typename T>
+  requires std::is_trivially_copyable_v<T>
+struct HostManager {
+  using value_type = T;
+  using pointer = value_type*;
+  using size_type = std::size_t;
+
+  static auto create(size_type n) noexcept { return new T[n]; }
+  static void destroy(pointer ptr) noexcept { delete[] ptr; }
+  static void set_n_zero(pointer ptr, size_type n) noexcept {
+    std::fill_n(ptr, n, value_type{});
+  }
+};
+
 }  // namespace detail
 
+// void copy(std::ranges::contiguous_range auto&& src,
+//           std::ranges::contiguous_range auto&& dest);
 void copy(std::ranges::contiguous_range auto&& src,
-          std::ranges::contiguous_range auto&& dest);
+          std::ranges::contiguous_range auto&& dest)
+  requires(HostContiguousRange<decltype(src)> or
+           HostContiguousRange<decltype(dest)> or
+           std::same_as<detail::space_t<decltype(src)>,
+                        detail::space_t<decltype(dest)>>)
+{
+  if constexpr (HostContiguousRange<decltype(dest)>) {
+    detail::space_t<decltype(src)>::copy(std::forward<decltype(src)>(src),
+                                         std::forward<decltype(dest)>(dest));
+  } else {
+    detail::space_t<decltype(dest)>::copy(std::forward<decltype(src)>(src),
+                                          std::forward<decltype(dest)>(dest));
+  }
+}
 
-template <template <typename> typename Manager, typename T,
-          std::size_t Extent = std::dynamic_extent>
+template <typename T, std::size_t Extent = std::dynamic_extent,
+          template <typename> typename Manager = detail::HostManager>
   requires detail::MemoryManager<Manager<T>>
 class Array {
  public:
@@ -104,33 +133,18 @@ class Array {
   [[no_unique_address]] Manager<T> manager_{};
 };
 
-namespace detail {
-
-template <typename T>
-  requires std::is_trivially_copyable_v<T>
-struct HostManager {
-  using value_type = T;
-  using pointer = value_type*;
-  using size_type = std::size_t;
-
-  static auto create(size_type n) noexcept { return new T[n]; }
-  static void destroy(pointer ptr) noexcept { delete[] ptr; }
-  static void set_n_zero(pointer ptr, size_type n) noexcept {
-    std::fill_n(ptr, n, value_type{});
-  }
-};
-
-}  // namespace detail
-
 // Deduction guides for Array.
 template <typename T, std::size_t E,
           template <typename> typename M = detail::HostManager>
-Array(T (&)[E]) -> Array<M, std::remove_cv_t<T>, E>;
+Array(T (&)[E]) -> Array<std::remove_cv_t<T>, E, M>;
 template <typename T, std::size_t E,
           template <typename> typename M = detail::HostManager>
-Array(std::array<T, E>) -> Array<M, std::remove_cv_t<T>, E>;
+Array(std::array<T, E>) -> Array<std::remove_cv_t<T>, E, M>;
 template <typename T, std::size_t E = std::dynamic_extent,
           template <typename> typename M = detail::HostManager>
-Array(std::vector<T>) -> Array<M, std::remove_cv_t<T>, E>;
+Array(std::vector<T>) -> Array<std::remove_cv_t<T>, E, M>;
+template <typename T, std::size_t E = std::dynamic_extent,
+          template <typename> typename M = detail::HostManager>
+Array(std::span<T, E>) -> Array<std::remove_cv_t<T>, E, M>;
 
 }  // namespace ParX::memory

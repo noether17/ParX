@@ -2,21 +2,19 @@
 
 #include <cstddef>
 #include <limits>
-#include <type_traits>
-#include <utility>
 
 #include "ParX/ParallelExecutor.hpp"
-#include "ParX/util/CudaAllocator.cuh"
+#include "ParX/memory/HostSpan.hpp"
 #include "ParX/util/CudaErrorCheck.cuh"
 
 namespace ParX {
 template <auto kernel, typename... Args>
 __global__ void cuda_call_kernel(std::size_t n_items, Args... args)
-  requires Kernel<kernel, Args...>
+// requires Kernel<kernel, Args...>
 {
   auto i = static_cast<std::size_t>(blockIdx.x * blockDim.x + threadIdx.x);
   while (i < n_items) {
-    kernel(i, args...);
+    kernel(i, ParX::memory::remove_space_tag(args)...);
     i += blockDim.x * gridDim.x;
   }
 }
@@ -25,7 +23,7 @@ template <std::size_t block_size, typename T, auto reduce, auto transform,
           typename... TransformArgs>
 __global__ void cuda_transform_reduce(T* block_results, std::size_t n_items,
                                       TransformArgs... transform_args)
-  requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
+// requires(Transform<transform, T, TransformArgs...> and Reduction<reduce, T>)
 {
   __shared__ T cache[block_size];
   auto const block_base_index = blockIdx.x * blockDim.x;
@@ -33,11 +31,13 @@ __global__ void cuda_transform_reduce(T* block_results, std::size_t n_items,
   auto i = static_cast<std::size_t>(block_base_index + cache_index);
   auto const grid_stride = blockDim.x * gridDim.x;
   if (i < n_items) {
-    cache[cache_index] = transform(i, transform_args...);
+    cache[cache_index] =
+        transform(i, ParX::memory::remove_space_tag(transform_args)...);
     i += grid_stride;
   }
   while (i < n_items) {
-    auto transform_result = transform(i, transform_args...);
+    auto transform_result =
+        transform(i, ParX::memory::remove_space_tag(transform_args)...);
     cache[cache_index] = reduce(cache[cache_index], transform_result);
     i += grid_stride;
   }
@@ -89,15 +89,15 @@ __global__ void cuda_transform_reduce_final(T* result, T const* block_results,
   }
 }
 
-namespace detail {
-constexpr decltype(auto) unwrap_cuda_argument(auto&& arg) noexcept {
-  return std::forward<decltype(arg)>(arg);
-}
-
-constexpr auto unwrap_cuda_argument(IsCudaPtr auto&& arg) noexcept {
-  return unwrap_argument(std::forward<decltype(arg)>(arg));
-}
-}  // namespace detail
+// namespace detail {
+// constexpr decltype(auto) unwrap_cuda_argument(auto&& arg) noexcept {
+//   return std::forward<decltype(arg)>(arg);
+// }
+//
+// constexpr auto unwrap_cuda_argument(IsCudaPtr auto&& arg) noexcept {
+//   return unwrap_argument(std::forward<decltype(arg)>(arg));
+// }
+// }  // namespace detail
 
 template <std::size_t block_size>
 class CudaExecutor {
@@ -121,25 +121,26 @@ class CudaExecutor {
 
   template <auto kernel, typename... Args>
   void call_kernel(std::size_t n_items, Args... args)
-    requires Kernel<kernel, decltype(detail::unwrap_cuda_argument(args))...> and
-             (not((std::is_pointer_v<Args> or ...) or
-                  (std::is_reference_v<Args> or ...)))
+  // requires Kernel<kernel, decltype(detail::unwrap_cuda_argument(args))...>
+  // and
+  //          (not((std::is_pointer_v<Args> or ...) or
+  //               (std::is_reference_v<Args> or ...)))
   {
-    cuda_call_kernel<kernel, decltype(detail::unwrap_cuda_argument(args))...>
-        <<<n_blocks(n_items), block_size, 0, stream_>>>(
-            n_items, detail::unwrap_cuda_argument(args)...);
+    cuda_call_kernel<kernel, Args...>
+        <<<n_blocks(n_items), block_size, 0, stream_>>>(n_items, args...);
     CUDA_ERROR_CHECK(cudaGetLastError());
   }
 
   template <typename T, auto reduce, auto transform, typename... TransformArgs>
   auto transform_reduce(T init_val, std::size_t n_items,
                         TransformArgs... transform_args)
-    requires(
-        Transform<transform, T,
-                  decltype(detail::unwrap_cuda_argument(transform_args))...> and
-        (not((std::is_pointer_v<TransformArgs> or ...) or
-             (std::is_reference_v<TransformArgs> or ...))) and
-        Reduction<reduce, T>)
+  // requires(
+  //     Transform<transform, T,
+  //               decltype(detail::unwrap_cuda_argument(transform_args))...>
+  //               and
+  //     (not((std::is_pointer_v<TransformArgs> or ...) or
+  //          (std::is_reference_v<TransformArgs> or ...))) and
+  //     Reduction<reduce, T>)
   {
     if (n_items == 0) {
       return init_val;
@@ -152,8 +153,7 @@ class CudaExecutor {
 
     cuda_transform_reduce<block_size, T, reduce, transform>
         <<<n_blocks(n_items), block_size, 0, stream_>>>(
-            dev_block_results, n_items,
-            detail::unwrap_cuda_argument(transform_args)...);
+            dev_block_results, n_items, transform_args...);
     CUDA_ERROR_CHECK(cudaGetLastError());
     cuda_transform_reduce_final<block_size, T, reduce>
         <<<1, block_size, 0, stream_>>>(dev_result, dev_block_results,

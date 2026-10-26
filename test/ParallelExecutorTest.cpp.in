@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <ParX/memory/HostSpan.hpp>
 #include <cmath>
 #include <cstddef>
 #include <numeric>
@@ -7,7 +8,7 @@
 
 #include "ParX/ParallelExecutor.hpp"
 #ifdef __CUDACC__
-#include "ParX/util/CudaArray.cuh"
+#include "ParX/memory/CudaDeviceArray.cuh"
 #endif
 
 // clang-format off
@@ -15,7 +16,7 @@
 
 decltype(auto) to_parx_range(auto&& host_range) {
 #ifdef __CUDACC__
-  return ParX::CudaArray{host_range};
+  return ParX::memory::CudaDeviceArray{host_range};
 #else
   return std::forward<decltype(host_range)>(host_range);
 #endif
@@ -24,9 +25,9 @@ decltype(auto) to_parx_range(auto&& host_range) {
 decltype(auto) to_host_range(auto&& parx_range) {
 #ifdef __CUDACC__
   auto host_range = std::vector<
-      typename std::remove_cvref_t<decltype(parx_range)>::value_type>(
+      typename std::remove_cvref_t<decltype(parx_range)>::value_type::raw_type>(
       parx_range.size());
-  ParX::copy_span_device_to_host(host_range, parx_range);
+  ParX::memory::copy(parx_range, host_range);
   return host_range;
 #else
   return std::forward<decltype(parx_range)>(parx_range);
@@ -76,19 +77,22 @@ class ${TEST_NAME} : public testing::Test {
   auto vector_sum(std::span<ElementType const> a,
                   std::span<ElementType const> b) {
     auto c = std::vector<ElementType>(a.size());
+    auto&& dev_a = to_parx_range(a);
+    auto&& dev_b = to_parx_range(b);
     auto&& dev_c = to_parx_range(c);
-    ParX::call_kernel<add_kernel>(par_exec, a.size(), to_parx_range(a).data(),
-                                  to_parx_range(b).data(), dev_c.data());
+    ParX::call_kernel<add_kernel>(par_exec, a.size(), dev_a.data(),
+                                  dev_b.data(), dev_c.data());
     ParX::synchronize(par_exec);
     return to_host_range(dev_c);
   }
 
   auto scalar_product(std::span<ElementType const> a,
                       std::span<ElementType const> b) {
+    auto&& dev_a = to_parx_range(a);
+    auto&& dev_b = to_parx_range(b);
     return ParX::transform_reduce<ElementType, add_reduction,
                                   multiply_transform>(
-        par_exec, ElementType{}, a.size(), to_parx_range(a).data(),
-        to_parx_range(b).data());
+        par_exec, ElementType{}, a.size(), dev_a.data(), dev_b.data());
   }
 
   // Closed-form expression for the sum of the squares of integers from 1 to n.

@@ -10,7 +10,13 @@ namespace ParX::memory {
 
 namespace detail {
 
-struct CudaAccessibleTag {};
+struct CudaAccessibleTag {
+  static void copy(auto&& src, auto&& dest) noexcept {
+    CUDA_ERROR_CHECK(cudaMemcpy(dest.data(), src.data(),
+                                src.size() * sizeof(*src.data()),
+                                cudaMemcpyDefault));
+  }
+};
 
 }  // namespace detail
 
@@ -29,11 +35,11 @@ template <typename T>
 concept CudaCopyableContiguousRange =
     HostContiguousRange<T> or CudaAccessibleContiguousRange<T>;
 
-void copy(CudaCopyableContiguousRange auto&& src,
-          CudaCopyableContiguousRange auto&& dest) noexcept {
-  CUDA_ERROR_CHECK(cudaMemcpy(dest.data(), src.data(),
-                              src.size() * sizeof(*src.data()),
-                              cudaMemcpyDefault));
-}
+// void copy(CudaCopyableContiguousRange auto&& src,
+//           CudaCopyableContiguousRange auto&& dest) noexcept {
+//   CUDA_ERROR_CHECK(cudaMemcpy(dest.data(), src.data(),
+//                               src.size() * sizeof(*src.data()),
+//                               cudaMemcpyDefault));
+// }
 
 }  // namespace ParX::memory

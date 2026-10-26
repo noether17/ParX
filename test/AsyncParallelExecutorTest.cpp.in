@@ -8,7 +8,7 @@
 
 #include "ParX/ParallelExecutor.hpp"
 #ifdef __CUDACC__
-#include "ParX/util/CudaArray.cuh"
+#include "ParX/memory/CudaDeviceArray.cuh"
 #endif
 
 // clang-format off
@@ -16,7 +16,7 @@
 
 decltype(auto) to_parx_range(auto&& host_range) {
 #ifdef __CUDACC__
-  return ParX::CudaArray{host_range};
+  return ParX::memory::CudaDeviceArray{host_range};
 #else
   return std::forward<decltype(host_range)>(host_range);
 #endif
@@ -25,9 +25,9 @@ decltype(auto) to_parx_range(auto&& host_range) {
 decltype(auto) to_host_range(auto&& parx_range) {
 #ifdef __CUDACC__
   auto host_range = std::vector<
-      typename std::remove_cvref_t<decltype(parx_range)>::value_type>(
+      typename std::remove_cvref_t<decltype(parx_range)>::value_type::raw_type>(
       parx_range.size());
-  ParX::copy_span_device_to_host(host_range, parx_range);
+  ParX::memory::copy(parx_range, host_range);
   return host_range;
 #else
   return std::forward<decltype(parx_range)>(parx_range);

@@ -13,7 +13,11 @@ namespace ParX::memory {
 
 namespace detail {
 
-struct HostResidentTag {};
+struct HostResidentTag {
+  static void copy(auto&& src, auto&& dest) noexcept {
+    std::ranges::copy(src, std::ranges::begin(dest));
+  }
+};
 
 template <typename T>
 struct space;
@@ -30,10 +34,10 @@ template <typename T>
 concept HostContiguousRange =
     std::ranges::contiguous_range<T> and HostResident<T>;
 
-void copy(HostContiguousRange auto&& src,
-          HostContiguousRange auto&& dest) noexcept {
-  std::ranges::copy(src, std::ranges::begin(dest));
-}
+// void copy(HostContiguousRange auto&& src,
+//           HostContiguousRange auto&& dest) noexcept {
+//   std::ranges::copy(src, std::ranges::begin(dest));
+// }
 
 namespace detail {
 
